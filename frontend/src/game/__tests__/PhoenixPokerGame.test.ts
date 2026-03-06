@@ -79,7 +79,7 @@ describe("PhoenixPokerGame", () => {
 		expect(game.view.actionTo).toBe(0);
 		expect(game.view.board).toEqual(["2h", "7d", "Tc"]);
 		expect(game.view.players[0]?.hand).toEqual(["Ah", "Ad"]);
-		expect(game.view.players[1]?.hand).toEqual([null, null]);
+		expect(game.view.players[1]?.hand).toEqual(["Kh", "Qh"]);
 		expect(game.view.currentBets.get(0)).toBe(20);
 	});
 
@@ -107,5 +107,70 @@ describe("PhoenixPokerGame", () => {
 		expect(game.view.winners).toEqual([{ seat: 0, amount: 80 }]);
 		expect(game.handResultSummary?.heading).toBe("Seat 1 wins");
 		expect(game.handResultSummary?.heroOutcome).toBe("win");
+	});
+
+	test("emits deal sound events from backend deal transitions", () => {
+		const game = new PhoenixPokerGame("player-test-1", async () => {});
+		const emitted: string[] = [];
+		game.onSoundEvent = (event) => {
+			if (
+				event.type === "hand_start" ||
+				event.type === "street_flop" ||
+				event.type === "street_turn" ||
+				event.type === "street_river"
+			) {
+				emitted.push(event.type);
+			}
+		};
+
+		game.sync(
+			buildTable({
+				last_event: "hand_3_started",
+				hand_number: 3,
+				hand_state: {
+					...buildTable().hand_state,
+					hand_number: 3,
+					stage: "preflop",
+					community_cards: [],
+				},
+			}),
+		);
+		game.sync(
+			buildTable({
+				last_event: "flop_dealt",
+				hand_state: {
+					...buildTable().hand_state,
+					stage: "flop",
+					community_cards: ["2h", "7d", "Tc"],
+				},
+			}),
+		);
+		game.sync(
+			buildTable({
+				last_event: "turn_dealt",
+				hand_state: {
+					...buildTable().hand_state,
+					stage: "turn",
+					community_cards: ["2h", "7d", "Tc", "Jc"],
+				},
+			}),
+		);
+		game.sync(
+			buildTable({
+				last_event: "river_dealt",
+				hand_state: {
+					...buildTable().hand_state,
+					stage: "river",
+					community_cards: ["2h", "7d", "Tc", "Jc", "As"],
+				},
+			}),
+		);
+
+		expect(emitted).toEqual([
+			"hand_start",
+			"street_flop",
+			"street_turn",
+			"street_river",
+		]);
 	});
 });

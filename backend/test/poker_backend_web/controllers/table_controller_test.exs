@@ -131,4 +131,23 @@ defmodule PokerBackendWeb.TableControllerTest do
     winning_seat = List.first(showdown["hand_state"]["winner_seats"])
     assert showdown["hand_state"]["winner_amounts"][Integer.to_string(winning_seat)] == 160
   end
+
+  test "supports clearing a table and adding bots one at a time" do
+    table_id = unique_table_id()
+    _ = fetch_table(table_id)
+
+    cleared = action(table_id, "clear_table")
+
+    assert Enum.count(cleared["players"], &(&1["is_bot"] and &1["stack"] <= 0)) == 8
+    assert cleared["last_event"] == "table_cleared"
+
+    first_bot = action(table_id, "add_bot")
+    assert Enum.count(first_bot["players"], &(&1["is_bot"] and &1["stack"] > 0)) == 1
+
+    seat_four_bot = action(table_id, "add_bot", %{"seat" => 4})
+    seat_four = Enum.find(seat_four_bot["players"], &(&1["seat"] == 4))
+
+    assert seat_four["is_bot"]
+    assert seat_four["stack"] == 5000
+  end
 end

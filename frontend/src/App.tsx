@@ -3,15 +3,20 @@ import {
 	useCallback,
 	useEffect,
 	useEffectEvent,
+	useMemo,
 	useRef,
 	useState,
 } from "react";
 import { PhoenixPokerGame } from "./game/PhoenixPokerGame";
 import { usePhoenixTable } from "./hooks/usePhoenixTable";
+import type { BackendTable } from "./types/backend";
 import type { Renderer } from "./ui/Renderer";
 
 const MAX_SEATS = 8;
 const TABLE_HASH_PREFIX = "#/tables/";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
+const TABLE_STORAGE_KEY = "poker.lobby_tables";
+const PROFILE_STORAGE_KEY = "poker.profile";
 
 type SeatLayout = {
 	seatX: number;
@@ -20,12 +25,27 @@ type SeatLayout = {
 	betY: number;
 };
 
-type OpenGame = {
+type LobbyTable = {
+	tableId: string;
+	name: string;
+	stakes: string;
+	createdAt?: string;
+};
+
+type LobbyGame = {
 	tableId: string;
 	name: string;
 	stakes: string;
 	bots: number;
 	openSeats: number;
+	humanPlayers: number;
+	status: string;
+	lastEvent: string;
+	connectedClients: number;
+};
+
+type AuthProfile = {
+	displayName: string;
 };
 
 type TableActionPayload = {
@@ -34,15 +54,11 @@ type TableActionPayload = {
 	show_cards?: boolean;
 };
 
-const OPEN_GAMES: OpenGame[] = [
-	{
-		tableId: "default",
-		name: "Bot Warmup Table",
-		stakes: "10 / 20",
-		bots: 7,
-		openSeats: 1,
-	},
-];
+const DEFAULT_TABLE: LobbyTable = {
+	tableId: "default",
+	name: "Bot Warmup Table",
+	stakes: "10 / 20",
+};
 
 const DESKTOP_SEAT_LAYOUTS: SeatLayout[] = [
 	{ seatX: 50, seatY: 92, betX: 50, betY: 79 },
@@ -110,61 +126,465 @@ function navigateToTable(tableId: string) {
 	window.location.hash = `${TABLE_HASH_PREFIX}${tableId}`;
 }
 
+function slugifyLabel(label: string) {
+	return label
+		.toLowerCase()
+		.trim()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 24);
+}
+
+function createTableId(label: string) {
+	const slug = slugifyLabel(label) || "table";
+	const suffix = Math.random().toString(36).slice(2, 7);
+	return `${slug}-${suffix}`;
+}
+
+function loadStoredTables(): LobbyTable[] {
+	if (typeof window === "undefined") return [];
+
+	const raw = window.localStorage.getItem(TABLE_STORAGE_KEY);
+	if (!raw) return [];
+
+	try {
+		const parsed = JSON.parse(raw) as LobbyTable[];
+		if (!Array.isArray(parsed)) return [];
+		return parsed.filter(
+			(table) =>
+				typeof table?.tableId === "string" &&
+				table.tableId.trim().length > 0 &&
+				table.tableId !== DEFAULT_TABLE.tableId,
+		);
+	} catch {
+		return [];
+	}
+}
+
+function storeTables(tables: LobbyTable[]) {
+	if (typeof window === "undefined") return;
+	window.localStorage.setItem(TABLE_STORAGE_KEY, JSON.stringify(tables));
+}
+
+function loadProfile(): AuthProfile | null {
+	if (typeof window === "undefined") return null;
+
+	const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+	if (!raw) return null;
+
+	try {
+		const parsed = JSON.parse(raw) as AuthProfile;
+		if (!parsed?.displayName) return null;
+		return { displayName: String(parsed.displayName) };
+	} catch {
+		return null;
+	}
+}
+
+function saveProfile(profile: AuthProfile | null) {
+	if (typeof window === "undefined") return;
+	if (profile == null) {
+		window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+		return;
+	}
+	window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+}
+
+async function fetchTableState(tableId: string): Promise<BackendTable | null> {
+	try {
+		const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}`);
+		if (!response.ok) return null;
+		return (await response.json()) as BackendTable;
+	} catch {
+		return null;
+	}
+}
+
+async function postTableAction(
+	tableId: string,
+	action: string,
+	payload: Record<string, unknown> = {},
+) {
+	const actionUrl = new URL(`${BACKEND_URL}/api/tables/${tableId}/actions`);
+	actionUrl.searchParams.set("action", action);
+
+	const response = await fetch(actionUrl.toString(), {
+		method: "POST",
+		headers: {
+			"content-type": "application/json",
+		},
+		body: JSON.stringify(payload),
+	});
+
+	if (!response.ok) {
+		throw new Error(`Action failed: ${action}`);
+	}
+
+	return (await response.json()) as BackendTable;
+}
+
 function LobbyScreen() {
+	const [storedTables, setStoredTables] = useState<LobbyTable[]>(() =>
+		loadStoredTables(),
+	);
+	const [games, setGames] = useState<LobbyGame[]>([]);
+	const [isLoading, setIsLoading] = useState(true);
+	const [profile, setProfile] = useState<AuthProfile | null>(() =>
+		loadProfile(),
+	);
+	const [authMode, setAuthMode] = useState<"login" | "register" | null>(null);
+	const [authName, setAuthName] = useState("");
+	const [createName, setCreateName] = useState("Friday Night Hold'em");
+	const [createStakes, setCreateStakes] = useState("10 / 20");
+	const [createBusy, setCreateBusy] = useState(false);
+	const [lobbyMessage, setLobbyMessage] = useState<string | null>(null);
+
+	const lobbyTables = useMemo(() => {
+		const map = new Map<string, LobbyTable>();
+		map.set(DEFAULT_TABLE.tableId, DEFAULT_TABLE);
+		for (const table of storedTables) {
+			map.set(table.tableId, table);
+		}
+		return Array.from(map.values());
+	}, [storedTables]);
+
+	const refreshGames = useCallback(async () => {
+		const loaded = await Promise.all(
+			lobbyTables.map(async (table): Promise<LobbyGame> => {
+				const state = await fetchTableState(table.tableId);
+				const activeBots =
+					state?.players.filter((player) => player.is_bot && player.stack > 0)
+						.length ?? 0;
+				const openSeats =
+					state?.players.filter((player) => player.is_bot).length ?? MAX_SEATS;
+				const humanPlayers =
+					state?.players.filter((player) => !player.is_bot).length ?? 0;
+				const status =
+					state == null
+						? "Offline"
+						: state.game_state === "hand_in_progress"
+							? "In hand"
+							: "Waiting";
+
+				return {
+					tableId: table.tableId,
+					name: table.name,
+					stakes: table.stakes,
+					bots: activeBots,
+					openSeats,
+					humanPlayers,
+					status,
+					lastEvent: state?.last_event ?? "unreachable",
+					connectedClients: state?.connected_clients ?? 0,
+				};
+			}),
+		);
+
+		setGames(loaded);
+		setIsLoading(false);
+	}, [lobbyTables]);
+
+	useEffect(() => {
+		void refreshGames();
+
+		const timer = window.setInterval(() => {
+			void refreshGames();
+		}, 8_000);
+
+		return () => {
+			window.clearInterval(timer);
+		};
+	}, [refreshGames]);
+
+	const submitAuth = useCallback(() => {
+		const name = authName.trim();
+		if (!name) return;
+		const nextProfile = { displayName: name };
+		saveProfile(nextProfile);
+		setProfile(nextProfile);
+		setAuthMode(null);
+		setAuthName("");
+	}, [authName]);
+
+	const logout = useCallback(() => {
+		saveProfile(null);
+		setProfile(null);
+		setAuthMode(null);
+		setAuthName("");
+	}, []);
+
+	const createTable = useCallback(async () => {
+		setCreateBusy(true);
+		setLobbyMessage(null);
+		const tableId = createTableId(createName);
+		const nextTable: LobbyTable = {
+			tableId,
+			name: createName.trim() || "Custom Table",
+			stakes: createStakes.trim() || "10 / 20",
+			createdAt: new Date().toISOString(),
+		};
+
+		const nextTables = [nextTable, ...storedTables].slice(0, 24);
+		storeTables(nextTables);
+		setStoredTables(nextTables);
+
+		try {
+			await fetchTableState(tableId);
+			await postTableAction(tableId, "clear_table");
+			navigateToTable(tableId);
+		} catch {
+			setLobbyMessage("Could not create table right now. Try again.");
+		}
+
+		setCreateBusy(false);
+	}, [createName, createStakes, storedTables]);
+
 	return (
 		<div id="app" className="app-lobby">
-			<section className="lobby-shell glass-panel anim-slide-up">
-				<div className="lobby-copy">
-					<p className="backend-eyebrow">Open games</p>
-					<h1>Join a table that is ready to run.</h1>
-					<p className="lobby-subcopy">
-						For now the lobby exposes a single table with seven bots and one
-						open seat for you.
-					</p>
+			<div className="lobby-bg-shape"></div>
+			<header className="top-bar glass-panel anim-slide-up">
+				<div className="brand-mark">
+					<div className="brand-token">P</div>
+					<div>
+						<p className="brand-title">Poker Royale</p>
+						<p className="brand-subtitle">No-limit Texas Hold'em</p>
+					</div>
 				</div>
 
-				<ul className="lobby-list" aria-label="Open games">
-					{OPEN_GAMES.map((game) => (
-						<li key={game.tableId} className="lobby-card glass-panel">
-							<div>
-								<p className="lobby-card-label">Cash game</p>
-								<h2>{game.name}</h2>
-								<p className="lobby-card-meta">
-									{game.bots} bots, {game.openSeats} open seat, blinds{" "}
-									{game.stakes}
-								</p>
-							</div>
-
-							<div className="lobby-card-stats">
-								<div>
-									<span>Table ID</span>
-									<strong>{game.tableId}</strong>
-								</div>
-								<div>
-									<span>Status</span>
-									<strong>Open</strong>
-								</div>
-							</div>
-
+				<div className="top-actions">
+					{profile ? (
+						<>
+							<button type="button" className="btn tiny profile-btn">
+								Profile: {profile.displayName}
+							</button>
+							<button type="button" className="btn tiny" onClick={logout}>
+								Logout
+							</button>
+						</>
+					) : (
+						<>
 							<button
 								type="button"
-								className="btn primary lobby-join-btn"
-								onClick={() => navigateToTable(game.tableId)}
+								className="btn tiny"
+								onClick={() => setAuthMode("login")}
 							>
-								Open Table
+								Login
 							</button>
-						</li>
-					))}
-				</ul>
-			</section>
+							<button
+								type="button"
+								className="btn primary tiny"
+								onClick={() => setAuthMode("register")}
+							>
+								Register
+							</button>
+						</>
+					)}
+				</div>
+			</header>
+
+			<main
+				className="lobby-shell glass-panel anim-slide-up"
+				style={{ animationDelay: "0.08s" }}
+			>
+				<section className="lobby-hero">
+					<div className="lobby-copy">
+						<p className="backend-eyebrow">Live lobby</p>
+						<h1>Find a table, create one, or launch your own bot arena.</h1>
+						<p className="lobby-subcopy">
+							Track active games, jump into open seats, and spin up a private
+							table in one click.
+						</p>
+					</div>
+					<div className="lobby-highlights">
+						<div>
+							<span>Open tables</span>
+							<strong>{games.length}</strong>
+						</div>
+						<div>
+							<span>Players seated</span>
+							<strong>
+								{games.reduce((sum, game) => sum + game.humanPlayers, 0)}
+							</strong>
+						</div>
+						<div>
+							<span>Bots in play</span>
+							<strong>{games.reduce((sum, game) => sum + game.bots, 0)}</strong>
+						</div>
+					</div>
+				</section>
+
+				<section className="lobby-main-grid">
+					<div className="lobby-column">
+						<div className="create-table-card glass-panel">
+							<h2>Create Table</h2>
+							<p>
+								New tables start empty. Add bots inside the table one seat at a
+								time.
+							</p>
+							<label>
+								Table Name
+								<input
+									type="text"
+									value={createName}
+									onChange={(event) => setCreateName(event.target.value)}
+								/>
+							</label>
+							<label>
+								Stakes
+								<input
+									type="text"
+									value={createStakes}
+									onChange={(event) => setCreateStakes(event.target.value)}
+								/>
+							</label>
+							<button
+								type="button"
+								className="btn primary"
+								disabled={createBusy}
+								onClick={() => void createTable()}
+							>
+								{createBusy ? "Creating..." : "Create Table"}
+							</button>
+							{lobbyMessage ? (
+								<p className="lobby-inline-note">{lobbyMessage}</p>
+							) : null}
+						</div>
+
+						{authMode ? (
+							<div className="auth-card glass-panel">
+								<h2>{authMode === "login" ? "Login" : "Register"}</h2>
+								<p>
+									Auth is local for now. This sets your display name for table
+									actions.
+								</p>
+								<label>
+									Display Name
+									<input
+										type="text"
+										value={authName}
+										onChange={(event) => setAuthName(event.target.value)}
+									/>
+								</label>
+								<div className="auth-actions">
+									<button
+										type="button"
+										className="btn primary tiny"
+										onClick={submitAuth}
+									>
+										Continue
+									</button>
+									<button
+										type="button"
+										className="btn tiny"
+										onClick={() => setAuthMode(null)}
+									>
+										Cancel
+									</button>
+								</div>
+							</div>
+						) : null}
+					</div>
+
+					<div className="lobby-column wide">
+						<div className="games-card glass-panel">
+							<div className="games-card-header">
+								<h2>Live Games</h2>
+								<button
+									type="button"
+									className="btn tiny"
+									onClick={() => void refreshGames()}
+								>
+									Refresh
+								</button>
+							</div>
+							<ul className="lobby-list" aria-label="Open games">
+								{games.map((game) => (
+									<li key={game.tableId} className="lobby-card glass-panel">
+										<div>
+											<p className="lobby-card-label">Cash Game</p>
+											<h3>{game.name}</h3>
+											<p className="lobby-card-meta">
+												Blinds {game.stakes} | {game.humanPlayers} players |{" "}
+												{game.bots} active bots
+											</p>
+										</div>
+
+										<div className="lobby-card-stats">
+											<div>
+												<span>Table</span>
+												<strong>{game.tableId}</strong>
+											</div>
+											<div>
+												<span>Status</span>
+												<strong>{game.status}</strong>
+											</div>
+											<div>
+												<span>Open Seats</span>
+												<strong>{game.openSeats}</strong>
+											</div>
+											<div>
+												<span>Watchers</span>
+												<strong>{game.connectedClients}</strong>
+											</div>
+										</div>
+
+										<div className="lobby-card-actions">
+											<button
+												type="button"
+												className="btn primary lobby-join-btn"
+												onClick={() => navigateToTable(game.tableId)}
+											>
+												Open Table
+											</button>
+											<p className="lobby-card-event">Last: {game.lastEvent}</p>
+										</div>
+									</li>
+								))}
+							</ul>
+							{isLoading ? (
+								<p className="lobby-inline-note">Loading tables...</p>
+							) : null}
+						</div>
+
+						<div className="extras-grid">
+							<div className="extra-card glass-panel">
+								<h3>Featured Format</h3>
+								<p>
+									6-max turbo cash with deep stacks and faster blind pressure.
+								</p>
+							</div>
+							<div className="extra-card glass-panel">
+								<h3>Daily Challenge</h3>
+								<p>
+									Win one showdown with pocket pairs and log three clean folds.
+								</p>
+							</div>
+							<div className="extra-card glass-panel">
+								<h3>Table Notes</h3>
+								<p>
+									Custom tables can be started empty and filled with bots from
+									inside the table view.
+								</p>
+							</div>
+						</div>
+					</div>
+				</section>
+			</main>
 		</div>
 	);
 }
 
-function TableScreen({ tableId }: { tableId: string }) {
+function TableScreen({
+	tableId,
+	isCustomTable,
+}: {
+	tableId: string;
+	isCustomTable: boolean;
+}) {
 	const gameRef = useRef<PhoenixPokerGame | null>(null);
 	const rendererRef = useRef<Renderer | null>(null);
 	const autoStartAttemptRef = useRef<string | null>(null);
+	const customInitRef = useRef(false);
 	const [backendOverlayCollapsed, setBackendOverlayCollapsed] = useState(true);
 	const [handLogCollapsed, setHandLogCollapsed] = useState(true);
 	const [seatLayouts, setSeatLayouts] =
@@ -173,7 +593,11 @@ function TableScreen({ tableId }: { tableId: string }) {
 		usePhoenixTable(tableId);
 	const occupiedSeats = backendTable?.players.length ?? 0;
 	const botSeats =
-		backendTable?.players.filter((player) => player.is_bot).length ?? 0;
+		backendTable?.players.filter((player) => player.is_bot && player.stack > 0)
+			.length ?? 0;
+	const emptySeatCount =
+		backendTable?.players.filter((player) => player.is_bot && player.stack <= 0)
+			.length ?? 0;
 	const ownedPlayer =
 		backendTable?.players.find((player) => player.player_id === playerId) ??
 		null;
@@ -199,6 +623,9 @@ function TableScreen({ tableId }: { tableId: string }) {
 		backendTable?.hand_state.status === "complete" &&
 		ownedPlayer != null &&
 		ownedPlayer.hole_cards.some((card) => card != null);
+	const canAddBot =
+		backendTable?.hand_state.status !== "in_progress" && emptySeatCount > 0;
+	const canClearTable = backendTable?.hand_state.status !== "in_progress";
 	const logControlDebug = useEffectEvent((message: string) => {
 		const timestamp = new Date().toLocaleTimeString("en-US", {
 			hour12: false,
@@ -419,6 +846,26 @@ function TableScreen({ tableId }: { tableId: string }) {
 		gameRef.current.sync(backendTable);
 		rendererRef.current.update();
 	}, [backendTable]);
+
+	useEffect(() => {
+		if (
+			!isCustomTable ||
+			!backendTable ||
+			customInitRef.current ||
+			backendTable.last_event !== "table_created"
+		) {
+			return;
+		}
+
+		const hasHumans = backendTable.players.some((player) => !player.is_bot);
+		if (hasHumans || backendTable.pending_players.length > 0) {
+			customInitRef.current = true;
+			return;
+		}
+
+		customInitRef.current = true;
+		void sendActionWithDebug("clear_table", undefined, "setup");
+	}, [backendTable, isCustomTable, sendActionWithDebug]);
 
 	useEffect(() => {
 		if (!backendTable) return;
@@ -740,12 +1187,50 @@ function TableScreen({ tableId }: { tableId: string }) {
 							<span>Choose seat</span>
 							<strong>Click an open seat on the table</strong>
 							<p>
-								You will replace that bot as soon as the current hand reaches a
-								safe swap point.
+								Join any open seat now. If a bot is there, you will replace it
+								at a safe swap point.
 							</p>
 						</div>
 					)}
 				</div>
+
+				{isCustomTable ? (
+					<div className="table-setup-controls">
+						<div className="seat-control-copy">
+							<span>Table setup</span>
+							<strong>Build this game one seat at a time</strong>
+							<p>
+								{botSeats} bots active, {emptySeatCount} open seats.
+							</p>
+						</div>
+						<div className="seat-control-actions">
+							<button
+								type="button"
+								className="btn"
+								disabled={!canAddBot}
+								onClick={() =>
+									void sendActionWithDebug("add_bot", undefined, "table-setup")
+								}
+							>
+								Add Bot
+							</button>
+							<button
+								type="button"
+								className="btn tiny"
+								disabled={!canClearTable}
+								onClick={() =>
+									void sendActionWithDebug(
+										"clear_table",
+										undefined,
+										"table-setup",
+									)
+								}
+							>
+								Empty Table
+							</button>
+						</div>
+					</div>
+				) : null}
 
 				{backendTable?.game_state === "waiting_for_hand" && readySeats >= 2 ? (
 					<div className="between-hand-actions">
@@ -915,5 +1400,11 @@ export default function App() {
 		return <LobbyScreen />;
 	}
 
-	return <TableScreen key={selectedTableId} tableId={selectedTableId} />;
+	return (
+		<TableScreen
+			key={selectedTableId}
+			tableId={selectedTableId}
+			isCustomTable={selectedTableId !== DEFAULT_TABLE.tableId}
+		/>
+	);
 }

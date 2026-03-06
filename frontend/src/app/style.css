@@ -52,18 +52,99 @@ body {
 	height: 100dvh;
 	padding: 1rem;
 	overflow: auto;
+	display: grid;
+	align-content: start;
+	gap: 0.9rem;
 }
 
 .app-table {
 	overflow: hidden;
 }
 
+.lobby-bg-shape {
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	background:
+		radial-gradient(
+			circle at 16% 12%,
+			rgba(62, 188, 118, 0.18),
+			transparent 34%
+		),
+		radial-gradient(circle at 85% 20%, rgba(47, 149, 255, 0.2), transparent 30%);
+	z-index: 0;
+}
+
+.top-bar {
+	position: relative;
+	z-index: 1;
+	width: min(1180px, 100%);
+	margin: 0 auto;
+	border-radius: 18px;
+	padding: 0.66rem 0.88rem;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.7rem;
+}
+
+.brand-mark {
+	display: flex;
+	align-items: center;
+	gap: 0.62rem;
+}
+
+.brand-token {
+	width: 36px;
+	height: 36px;
+	border-radius: 999px;
+	display: grid;
+	place-items: center;
+	font-weight: 800;
+	color: #eafaff;
+	background: linear-gradient(155deg, #157f4b, #0b4e2e);
+	border: 1px solid rgba(153, 235, 195, 0.38);
+}
+
+.brand-title {
+	font-size: 0.92rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.brand-subtitle {
+	font-size: 0.72rem;
+	color: var(--text-muted);
+}
+
+.top-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 0.42rem;
+}
+
+.profile-btn {
+	min-width: 170px;
+}
+
 .lobby-shell {
-	width: min(1040px, 100%);
+	position: relative;
+	z-index: 1;
+	width: min(1180px, 100%);
 	margin: 0 auto;
 	border-radius: 28px;
-	padding: clamp(1.2rem, 2vw, 2rem);
+	padding: clamp(1rem, 1.8vw, 1.6rem);
 	display: grid;
+	gap: 1.1rem;
+}
+
+.lobby-hero {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
 	gap: 1rem;
 }
 
@@ -84,6 +165,116 @@ body {
 	font-size: 1rem;
 }
 
+.lobby-highlights {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(130px, 1fr));
+	gap: 0.5rem;
+}
+
+.lobby-highlights div {
+	border-radius: 12px;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	background: rgba(255, 255, 255, 0.04);
+	padding: 0.52rem 0.62rem;
+}
+
+.lobby-highlights span {
+	display: block;
+	font-size: 0.66rem;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+
+.lobby-highlights strong {
+	display: block;
+	margin-top: 0.2rem;
+	font-size: 1.08rem;
+}
+
+.lobby-main-grid {
+	display: grid;
+	grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+	gap: 0.95rem;
+}
+
+.lobby-column {
+	display: grid;
+	align-content: start;
+	gap: 0.75rem;
+}
+
+.lobby-column.wide {
+	gap: 0.9rem;
+}
+
+.create-table-card,
+.auth-card,
+.games-card,
+.extra-card {
+	border-radius: 18px;
+	padding: 0.86rem 0.95rem;
+}
+
+.create-table-card,
+.auth-card {
+	display: grid;
+	gap: 0.52rem;
+}
+
+.create-table-card h2,
+.auth-card h2,
+.games-card h2 {
+	font-size: 1.05rem;
+}
+
+.create-table-card p,
+.auth-card p,
+.extra-card p {
+	font-size: 0.76rem;
+	color: var(--text-muted);
+}
+
+.create-table-card label,
+.auth-card label {
+	display: grid;
+	gap: 0.24rem;
+	font-size: 0.72rem;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: #ccdaee;
+}
+
+.create-table-card input,
+.auth-card input {
+	background: rgba(4, 13, 24, 0.72);
+	border: 1px solid rgba(255, 255, 255, 0.16);
+	color: var(--text-main);
+	border-radius: 10px;
+	padding: 0.48rem 0.54rem;
+	font-size: 0.85rem;
+	font-family: "Outfit", sans-serif;
+}
+
+.create-table-card input:focus,
+.auth-card input:focus {
+	outline: 1px solid var(--accent-color);
+	border-color: var(--accent-color);
+}
+
+.auth-actions {
+	display: flex;
+	gap: 0.42rem;
+}
+
+.games-card-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	margin-bottom: 0.6rem;
+}
+
 .lobby-list {
 	display: grid;
 	gap: 0.85rem;
@@ -92,9 +283,12 @@ body {
 
 .lobby-card {
 	border-radius: 22px;
-	padding: 1rem;
+	padding: 0.86rem;
 	display: grid;
-	grid-template-columns: minmax(0, 1.4fr) minmax(180px, 0.7fr) auto;
+	grid-template-columns: minmax(0, 1.2fr) minmax(180px, 0.7fr) minmax(
+			130px,
+			auto
+		);
 	align-items: center;
 	gap: 1rem;
 }
@@ -106,8 +300,8 @@ body {
 	color: #9fd4ff;
 }
 
-.lobby-card h2 {
-	font-size: 1.35rem;
+.lobby-card h3 {
+	font-size: 1.15rem;
 	margin-top: 0.2rem;
 }
 
@@ -140,11 +334,34 @@ body {
 .lobby-card-stats strong {
 	display: block;
 	margin-top: 0.24rem;
-	font-size: 0.95rem;
+	font-size: 0.86rem;
+}
+
+.lobby-card-actions {
+	display: grid;
+	justify-items: end;
+	gap: 0.3rem;
 }
 
 .lobby-join-btn {
-	min-width: 140px;
+	min-width: 120px;
+}
+
+.lobby-card-event,
+.lobby-inline-note {
+	font-size: 0.66rem;
+	color: var(--text-muted);
+}
+
+.extras-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 0.72rem;
+}
+
+.extra-card h3 {
+	font-size: 0.92rem;
+	margin-bottom: 0.2rem;
 }
 
 .table-nav {
@@ -881,6 +1098,19 @@ input[type="range"] {
 		--controls-space: 128px;
 	}
 
+	.top-bar,
+	.lobby-shell {
+		width: min(980px, 100%);
+	}
+
+	.lobby-main-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.lobby-highlights {
+		width: 100%;
+	}
+
 	.table-layout {
 		min-height: 0;
 		height: calc(
@@ -942,9 +1172,35 @@ input[type="range"] {
 		padding: 0.7rem;
 	}
 
+	.top-bar {
+		padding: 0.55rem 0.62rem;
+		border-radius: 14px;
+	}
+
+	.brand-subtitle {
+		display: none;
+	}
+
 	.lobby-shell {
 		padding: 1rem;
 		border-radius: 20px;
+	}
+
+	.lobby-hero {
+		gap: 0.72rem;
+	}
+
+	.lobby-copy h1 {
+		font-size: clamp(1.45rem, 8vw, 2rem);
+		max-width: none;
+	}
+
+	.lobby-highlights {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	.lobby-main-grid {
+		grid-template-columns: 1fr;
 	}
 
 	.lobby-card {
@@ -957,6 +1213,18 @@ input[type="range"] {
 
 	.lobby-join-btn {
 		width: 100%;
+	}
+
+	.lobby-card-actions {
+		justify-items: stretch;
+	}
+
+	.auth-actions {
+		flex-direction: column;
+	}
+
+	.extras-grid {
+		grid-template-columns: 1fr;
 	}
 
 	.game-info {
@@ -1443,6 +1711,15 @@ input[type="range"] {
 	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.table-setup-controls {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.55rem;
+	padding: 0.08rem 0 0.28rem;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .seat-control-copy {
 	display: grid;
 	gap: 0.08rem;
@@ -1521,6 +1798,11 @@ input[type="range"] {
 		flex-direction: column;
 		align-items: stretch;
 		padding-bottom: 0.3rem;
+	}
+
+	.table-setup-controls {
+		flex-direction: column;
+		align-items: stretch;
 	}
 
 	.between-hand-actions {

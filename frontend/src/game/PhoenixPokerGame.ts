@@ -85,21 +85,38 @@ export class PhoenixPokerGame {
 		const previous = this.table;
 		this.table = table;
 
-		if (previous?.hand_state.hand_number !== table.hand_state.hand_number) {
-			this.onSoundEvent({ type: "hand_start" });
-			this.onMessage(`Hand ${table.hand_state.hand_number} started.`);
+		const previousLastEvent = previous?.last_event;
+		const nextLastEvent = table.last_event;
+		const dealSoundFromEvent =
+			previousLastEvent !== nextLastEvent
+				? this.mapDealSoundEvent(nextLastEvent)
+				: null;
+		if (dealSoundFromEvent != null) {
+			this.onSoundEvent(dealSoundFromEvent);
+			if (dealSoundFromEvent.type === "hand_start") {
+				this.onMessage(`Hand ${table.hand_state.hand_number} started.`);
+			}
+		} else {
+			const previousStage = previous?.hand_state.stage;
+			if (previousStage !== table.hand_state.stage) {
+				if (table.hand_state.stage === "flop")
+					this.onSoundEvent({ type: "street_flop" });
+				if (table.hand_state.stage === "turn")
+					this.onSoundEvent({ type: "street_turn" });
+				if (table.hand_state.stage === "river")
+					this.onSoundEvent({ type: "street_river" });
+			}
+			if (previous?.hand_state.hand_number !== table.hand_state.hand_number) {
+				this.onSoundEvent({ type: "hand_start" });
+				this.onMessage(`Hand ${table.hand_state.hand_number} started.`);
+			}
 		}
 
-		const previousStage = previous?.hand_state.stage;
-		if (previousStage !== table.hand_state.stage) {
-			if (table.hand_state.stage === "flop")
-				this.onSoundEvent({ type: "street_flop" });
-			if (table.hand_state.stage === "turn")
-				this.onSoundEvent({ type: "street_turn" });
-			if (table.hand_state.stage === "river")
-				this.onSoundEvent({ type: "street_river" });
-			if (table.hand_state.stage === "showdown")
-				this.onSoundEvent({ type: "street_showdown" });
+		if (
+			previous?.hand_state.stage !== table.hand_state.stage &&
+			table.hand_state.stage === "showdown"
+		) {
+			this.onSoundEvent({ type: "street_showdown" });
 		}
 
 		const previousActor = previous?.hand_state.acting_seat;
@@ -261,5 +278,13 @@ export class PhoenixPokerGame {
 		if (stage === "river") return "RIVER";
 		if (stage === "showdown") return "SHOWDOWN";
 		return "PREFLOP";
+	}
+
+	private mapDealSoundEvent(lastEvent: string): PokerSoundEvent | null {
+		if (/^hand_\d+_started$/.test(lastEvent)) return { type: "hand_start" };
+		if (lastEvent === "flop_dealt") return { type: "street_flop" };
+		if (lastEvent === "turn_dealt") return { type: "street_turn" };
+		if (lastEvent === "river_dealt") return { type: "street_river" };
+		return null;
 	}
 }

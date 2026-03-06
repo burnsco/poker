@@ -12,6 +12,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
 const WEBSOCKET_BASE =
 	import.meta.env.VITE_BACKEND_WS_URL || "ws://localhost:4000/socket";
 const PLAYER_ID_STORAGE_KEY = "poker.player_id";
+const PROFILE_STORAGE_KEY = "poker.profile";
 
 function loadPlayerIdentity() {
 	if (typeof window === "undefined") {
@@ -24,9 +25,22 @@ function loadPlayerIdentity() {
 		window.localStorage.setItem(PLAYER_ID_STORAGE_KEY, playerId);
 	}
 
+	let playerName = `Player ${playerId.slice(-4).toUpperCase()}`;
+	const profileRaw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+	if (profileRaw) {
+		try {
+			const parsed = JSON.parse(profileRaw) as { displayName?: string };
+			if (parsed.displayName?.trim()) {
+				playerName = parsed.displayName.trim();
+			}
+		} catch {
+			// Ignore malformed profile payload and keep generated player name.
+		}
+	}
+
 	return {
 		playerId,
-		playerName: `Player ${playerId.slice(-4).toUpperCase()}`,
+		playerName,
 	};
 }
 
@@ -61,6 +75,7 @@ export function usePhoenixTable(tableId = "default"): UsePhoenixTableResult {
 					action,
 					amount: payload?.amount,
 					seat: payload?.seat,
+					show_cards: payload?.show_cards,
 					player_id: playerId,
 					player_name: playerName,
 				}),
