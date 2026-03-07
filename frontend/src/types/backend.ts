@@ -16,6 +16,7 @@ export type BackendPlayer = {
 	player_id: string | null;
 	connected: boolean;
 	bet_this_street: number;
+	contributed_this_hand: number;
 	hole_cards: Array<string | null>;
 };
 

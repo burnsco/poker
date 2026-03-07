@@ -61,6 +61,13 @@ defmodule PokerBackend.BotAiTest do
     Table.state(table_id)
   end
 
+  defp seed_bot_rng(pid, seed) do
+    :sys.replace_state(pid, fn state ->
+      :rand.seed(:exsss, seed)
+      state
+    end)
+  end
+
   test "boots with at least four distinct bot styles" do
     table_id = unique_table_id()
     {:ok, _pid} = Table.ensure_started(table_id)
@@ -83,6 +90,7 @@ defmodule PokerBackend.BotAiTest do
   test "calling stations flat spots that lag bots raise" do
     {table_id, pid} = start_table()
     force_preflop_spot(pid, 2, ["Js", "Jd"])
+    seed_bot_rng(pid, {1, 1, 1})
 
     calling_station_state = run_bot_turn(pid, table_id)
 
@@ -91,6 +99,7 @@ defmodule PokerBackend.BotAiTest do
 
     {table_id, pid} = start_table()
     force_preflop_spot(pid, 4, ["Js", "Jd"])
+    seed_bot_rng(pid, {1, 1, 2})
 
     lag_state = run_bot_turn(pid, table_id)
 
@@ -101,12 +110,14 @@ defmodule PokerBackend.BotAiTest do
   test "nit bots fold marginal hands that calling stations continue with" do
     {table_id, pid} = start_table()
     force_preflop_spot(pid, 2, ["As", "9d"])
+    seed_bot_rng(pid, {1, 1, 1})
 
     calling_station_state = run_bot_turn(pid, table_id)
     assert calling_station_state.last_event == "Seat 2 calls 20."
 
     {table_id, pid} = start_table()
     force_preflop_spot(pid, 6, ["As", "9d"])
+    seed_bot_rng(pid, {1, 1, 6})
 
     nit_state = run_bot_turn(pid, table_id)
 

@@ -13,7 +13,7 @@
 	--table-width: min(83vw, 1008px);
 	--table-height: min(62vh, 620px);
 	--top-ui-space: 96px;
-	--controls-space: 136px;
+	--controls-space: 110px;
 	--app-pad-x: 1rem;
 }
 
@@ -615,7 +615,7 @@ body {
 
 .player-area {
 	position: relative;
-	width: 108px;
+	width: 172px;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -644,6 +644,15 @@ body {
 .player-area.is-folded,
 .player-area.is-busted {
 	opacity: 0.66;
+}
+
+.player-area.is-folded {
+	opacity: 0.9;
+	filter: saturate(0.72);
+}
+
+.player-area.is-winner {
+	z-index: 10;
 }
 
 .avatar-row {
@@ -681,6 +690,35 @@ body {
 	filter: grayscale(1);
 }
 
+.player-area.is-folded .player-avatar {
+	border-color: rgba(233, 115, 115, 0.84);
+	background:
+		radial-gradient(
+			circle at 30% 28%,
+			rgba(255, 214, 214, 0.12),
+			transparent 40%
+		),
+		linear-gradient(135deg, #3b2323, #1d1111);
+	box-shadow:
+		0 0 0 3px rgba(233, 115, 115, 0.12),
+		0 8px 20px rgba(0, 0, 0, 0.38);
+}
+
+.player-area.is-winner .player-avatar {
+	border-color: rgba(255, 214, 102, 0.96);
+	background:
+		radial-gradient(
+			circle at 30% 28%,
+			rgba(255, 231, 160, 0.34),
+			transparent 38%
+		),
+		linear-gradient(135deg, #4f4110, #20180a);
+	box-shadow:
+		0 0 0 4px rgba(255, 214, 102, 0.18),
+		0 10px 26px rgba(0, 0, 0, 0.42),
+		0 0 28px rgba(255, 214, 102, 0.24);
+}
+
 .player-info {
 	min-width: 108px;
 	border-radius: 12px;
@@ -698,11 +736,51 @@ body {
 	background: rgba(36, 26, 8, 0.44);
 }
 
+.player-area.is-folded .player-info {
+	border-color: rgba(233, 115, 115, 0.54);
+	background:
+		linear-gradient(180deg, rgba(72, 28, 28, 0.86), rgba(30, 14, 14, 0.8)),
+		rgba(255, 255, 255, 0.04);
+	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
+}
+
+.player-area.is-winner .player-info {
+	border-color: rgba(255, 214, 102, 0.72);
+	background:
+		linear-gradient(180deg, rgba(78, 58, 13, 0.88), rgba(26, 21, 9, 0.82)),
+		rgba(255, 255, 255, 0.06);
+	box-shadow:
+		0 10px 24px rgba(0, 0, 0, 0.26),
+		0 0 24px rgba(255, 214, 102, 0.12);
+}
+
 .player-name {
 	font-size: 0.74rem;
 	font-weight: 600;
 	line-height: 1.05;
 	color: #eaf1ff;
+}
+
+.player-area.is-winner .player-name::after {
+	content: "WINNER";
+	display: block;
+	margin-top: 0.18rem;
+	font-size: 0.48rem;
+	line-height: 1;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: #ffd666;
+}
+
+.player-area.is-folded .player-name::after {
+	content: "FOLDED";
+	display: block;
+	margin-top: 0.18rem;
+	font-size: 0.48rem;
+	line-height: 1;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: #ff9b9b;
 }
 
 .player-chips {
@@ -713,11 +791,6 @@ body {
 	color: #f8cf6f;
 }
 
-.player-chips .bet-line {
-	color: var(--text-muted);
-	font-size: 0.64rem;
-}
-
 .player-status {
 	min-height: 0.9rem;
 	font-size: 0.66rem;
@@ -726,6 +799,14 @@ body {
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
 	color: #f3b26d;
+}
+
+.player-area.is-winner .player-status {
+	color: #ffe082;
+}
+
+.player-area.is-folded .player-status {
+	color: #ffb3b3;
 }
 
 .player-cards {
@@ -739,34 +820,123 @@ body {
 
 .player-cards.is-avatar-stack .hole-slot,
 .player-cards.is-avatar-stack .hole-card {
-	width: 16px;
-	height: 22px;
-	border-radius: 4px;
+	width: 48px;
+	height: 66px;
+	border-radius: 8px;
 }
 
 .player-cards.is-avatar-stack .hole-card {
-	padding: 0.06rem;
-	box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+	padding: 0.16rem 0.2rem;
+	font-size: 0.94rem;
+	box-shadow: 0 7px 18px rgba(0, 0, 0, 0.34);
+}
+
+.player-cards.is-avatar-stack .hole-card .center-suit {
+	font-size: 1.28rem;
+}
+
+.player-area.is-winner .hole-card,
+.player-area.is-winner .hole-slot {
+	border-color: rgba(255, 214, 102, 0.68);
+	box-shadow:
+		0 10px 22px rgba(0, 0, 0, 0.34),
+		0 0 18px rgba(255, 214, 102, 0.18);
+}
+
+.player-cards.is-folded {
+	position: relative;
+}
+
+.player-cards.is-folded::after {
+	content: "×";
+	position: absolute;
+	right: -0.15rem;
+	top: -0.35rem;
+	width: 1.15rem;
+	height: 1.15rem;
+	border-radius: 999px;
+	display: grid;
+	place-items: center;
+	font-size: 0.9rem;
+	font-weight: 900;
+	line-height: 1;
+	color: #fff3f3;
+	background: linear-gradient(180deg, #d86060, #8e2b2b);
+	box-shadow:
+		0 4px 10px rgba(0, 0, 0, 0.3),
+		0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 
 .seat-bet {
 	transform: translate(-50%, -50%);
 	display: none;
+	flex-direction: column;
 	align-items: center;
-	justify-content: center;
-	min-width: 68px;
-	min-height: 30px;
-	border-radius: 999px;
-	background: radial-gradient(circle at 30% 30%, #ffe8a5, #ce8e1a 72%);
-	border: 2px solid rgba(255, 255, 255, 0.55);
-	color: #312104;
-	font-weight: 800;
-	font-size: 0.78rem;
-	box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+	gap: 0.18rem;
+	pointer-events: none;
 }
 
 .seat-bet.visible {
-	display: inline-flex;
+	display: flex;
+}
+
+.bet-label {
+	background: rgba(4, 10, 22, 0.88);
+	border: 1px solid rgba(248, 207, 111, 0.45);
+	border-radius: 999px;
+	padding: 0.08rem 0.4rem;
+	font-size: 0.72rem;
+	font-weight: 800;
+	color: #f8cf6f;
+	white-space: nowrap;
+	line-height: 1.5;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+.chip-stack {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+.chip {
+	width: 28px;
+	height: 11px;
+	border-radius: 50%;
+	margin-bottom: -5px;
+	position: relative;
+	border-top: 2px solid rgba(255, 255, 255, 0.38);
+	border-bottom: 2px solid rgba(0, 0, 0, 0.45);
+	box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5);
+}
+
+.chip::after {
+	content: "";
+	position: absolute;
+	inset: 1px 5px;
+	border-left: 2px solid rgba(255, 255, 255, 0.2);
+	border-right: 2px solid rgba(255, 255, 255, 0.2);
+	border-radius: inherit;
+}
+
+.chip-white {
+	background: linear-gradient(180deg, #e0e0e0 0%, #a8a8a8 100%);
+}
+
+.chip-red {
+	background: linear-gradient(180deg, #e05555 0%, #991a1a 100%);
+}
+
+.chip-green {
+	background: linear-gradient(180deg, #2ea86a 0%, #156038 100%);
+}
+
+.chip-black {
+	background: linear-gradient(180deg, #4a4a4a 0%, #181818 100%);
+}
+
+.chip-purple {
+	background: linear-gradient(180deg, #9960c8 0%, #54257a 100%);
 }
 
 .seat-bet-anchor {
@@ -998,18 +1168,121 @@ body {
 	opacity: 0.72;
 }
 
+.controls-top {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	min-height: 22px;
+}
+
+.controls-strip-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.28rem;
+	flex-shrink: 0;
+}
+
+.controls-strip-hint {
+	font-size: 0.64rem;
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
 .action-state {
 	text-align: left;
 	color: var(--text-muted);
-	font-size: 0.72rem;
+	font-size: 0.7rem;
 	font-weight: 600;
+	min-width: 0;
 }
 
-.bet-slider-container {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
+.bet-sizing-row {
+	display: flex;
 	align-items: center;
-	gap: 0.5rem;
+	gap: 0.28rem;
+}
+
+.preset-group {
+	display: flex;
+	gap: 0.14rem;
+	flex-shrink: 0;
+}
+
+.preset-sep {
+	width: 1px;
+	align-self: stretch;
+	background: rgba(255, 255, 255, 0.14);
+	flex-shrink: 0;
+	margin: 0 0.06rem;
+}
+
+.preset-btn {
+	padding: 0.2rem 0.34rem;
+	border-radius: 6px;
+	font-family: "Outfit", sans-serif;
+	font-size: 0.62rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	cursor: pointer;
+	border: 1px solid;
+	transition: background 0.14s ease;
+	white-space: nowrap;
+	line-height: 1.2;
+}
+
+.preset-btn:disabled {
+	opacity: 0.38;
+	cursor: default;
+}
+
+.bb-preset {
+	background: rgba(47, 149, 255, 0.1);
+	border-color: rgba(47, 149, 255, 0.3);
+	color: #9fd4ff;
+}
+
+.bb-preset:not(:disabled):hover {
+	background: rgba(47, 149, 255, 0.22);
+}
+
+.pot-preset {
+	background: rgba(248, 207, 111, 0.09);
+	border-color: rgba(248, 207, 111, 0.28);
+	color: #f0cb70;
+}
+
+.pot-preset:not(:disabled):hover {
+	background: rgba(248, 207, 111, 0.18);
+}
+
+.allin-preset {
+	background: rgba(214, 88, 88, 0.1);
+	border-color: rgba(214, 88, 88, 0.3);
+	color: #f08888;
+	flex-shrink: 0;
+}
+
+.allin-preset:not(:disabled):hover {
+	background: rgba(214, 88, 88, 0.2);
+}
+
+.slider-zone {
+	display: flex;
+	align-items: center;
+	gap: 0.38rem;
+	flex: 1;
+	min-width: 0;
+}
+
+.action-call {
+	background: rgba(46, 168, 106, 0.14);
+	border-color: rgba(46, 168, 106, 0.35);
+}
+
+.action-call:not(:disabled):hover {
+	background: rgba(46, 168, 106, 0.26);
 }
 
 input[type="range"] {
@@ -1095,7 +1368,7 @@ input[type="range"] {
 @media (max-width: 1100px) {
 	:root {
 		--table-height: min(58vh, 560px);
-		--controls-space: 128px;
+		--controls-space: 104px;
 	}
 
 	.top-bar,
@@ -1159,7 +1432,7 @@ input[type="range"] {
 		--table-width: min(86vw, 1008px);
 		--table-height: min(50vh, 430px);
 		--top-ui-space: 86px;
-		--controls-space: 154px;
+		--controls-space: 116px;
 		--app-pad-x: 0.55rem;
 	}
 
@@ -1310,7 +1583,7 @@ input[type="range"] {
 	}
 
 	.player-area {
-		width: 74px;
+		width: 144px;
 		gap: 0.2rem;
 	}
 
@@ -1360,6 +1633,22 @@ input[type="range"] {
 		font-size: 0.58rem;
 	}
 
+	.player-cards.is-avatar-stack .hole-slot,
+	.player-cards.is-avatar-stack .hole-card {
+		width: 42px;
+		height: 58px;
+		border-radius: 7px;
+	}
+
+	.player-cards.is-avatar-stack .hole-card {
+		font-size: 0.82rem;
+		padding: 0.14rem 0.16rem;
+	}
+
+	.player-cards.is-avatar-stack .hole-card .center-suit {
+		font-size: 1.08rem;
+	}
+
 	.is-you {
 		width: 136px;
 	}
@@ -1387,26 +1676,40 @@ input[type="range"] {
 		font-size: 0.95rem;
 	}
 
-	.seat-bet {
-		min-width: 50px;
-		min-height: 21px;
+	.chip {
+		width: 20px;
+		height: 8px;
+		margin-bottom: -4px;
+	}
+
+	.bet-label {
 		font-size: 0.58rem;
+		padding: 0.05rem 0.28rem;
 	}
 
 	.controls-container {
 		width: calc(100% - 0.2rem);
-		padding: 0.5rem 0.5rem 0.7rem;
-		gap: 0.32rem;
+		padding: 0.42rem 0.5rem calc(0.55rem + env(safe-area-inset-bottom));
+		gap: 0.28rem;
 		max-height: none;
 	}
 
 	.action-state {
-		font-size: 0.7rem;
+		font-size: 0.66rem;
+	}
+
+	.preset-btn {
+		font-size: 0.56rem;
+		padding: 0.16rem 0.26rem;
+	}
+
+	.bet-sizing-row {
+		gap: 0.2rem;
 	}
 
 	#bet-amount-display {
-		min-width: 58px;
-		font-size: 0.78rem;
+		min-width: 48px;
+		font-size: 0.72rem;
 	}
 
 	.btn {
@@ -1428,7 +1731,7 @@ input[type="range"] {
 	:root {
 		--table-height: min(60vh, 330px);
 		--top-ui-space: 66px;
-		--controls-space: 118px;
+		--controls-space: 96px;
 	}
 
 	.game-info {
@@ -1478,7 +1781,7 @@ input[type="range"] {
 	}
 
 	.player-area {
-		width: 66px;
+		width: 126px;
 		gap: 0.16rem;
 	}
 
@@ -1522,6 +1825,22 @@ input[type="range"] {
 		font-size: 0.46rem;
 	}
 
+	.player-cards.is-avatar-stack .hole-slot,
+	.player-cards.is-avatar-stack .hole-card {
+		width: 36px;
+		height: 50px;
+		border-radius: 6px;
+	}
+
+	.player-cards.is-avatar-stack .hole-card {
+		font-size: 0.68rem;
+		padding: 0.12rem 0.14rem;
+	}
+
+	.player-cards.is-avatar-stack .hole-card .center-suit {
+		font-size: 0.92rem;
+	}
+
 	.is-you {
 		width: 118px;
 	}
@@ -1560,23 +1879,39 @@ input[type="range"] {
 		font-size: 0.4rem;
 	}
 
+	.chip {
+		width: 18px;
+		height: 7px;
+		margin-bottom: -3px;
+	}
+
+	.bet-label {
+		font-size: 0.52rem;
+		padding: 0.04rem 0.24rem;
+	}
+
 	.controls-container {
 		max-height: none;
-		padding: 0.42rem 0.48rem calc(0.55rem + env(safe-area-inset-bottom));
-		gap: 0.3rem;
+		padding: 0.34rem 0.48rem calc(0.45rem + env(safe-area-inset-bottom));
+		gap: 0.24rem;
 	}
 
 	.action-state {
-		font-size: 0.62rem;
+		font-size: 0.6rem;
 	}
 
-	.bet-slider-container {
-		gap: 0.38rem;
+	.preset-btn {
+		font-size: 0.52rem;
+		padding: 0.14rem 0.22rem;
+	}
+
+	.bet-sizing-row {
+		gap: 0.18rem;
 	}
 
 	#bet-amount-display {
-		font-size: 0.68rem;
-		min-width: 52px;
+		font-size: 0.64rem;
+		min-width: 46px;
 	}
 
 	.btn {

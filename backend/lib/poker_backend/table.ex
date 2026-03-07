@@ -20,34 +20,56 @@ defmodule PokerBackend.Table do
     7 => "Gia",
     8 => "Harper"
   }
+  # Three archetypes, distributed across 8 seats with slight per-seat variance.
+  #   tight      – cautious, folds marginal hands, small bets
+  #   balanced   – follows CFR closely, moderate sizing
+  #   aggressive – bluffs more, bigger bets, rarely folds pre-flop
   @bot_profiles %{
-    1 => %{style: "nit", looseness: -16, aggression: 10, bluff: 1},
-    2 => %{style: "calling_station", looseness: 14, aggression: -8, bluff: 0},
-    3 => %{style: "balanced", looseness: 2, aggression: 6, bluff: 3},
-    4 => %{style: "lag", looseness: 10, aggression: 18, bluff: 8},
-    5 => %{style: "lag", looseness: 12, aggression: 20, bluff: 10},
-    6 => %{style: "nit", looseness: -14, aggression: 12, bluff: 1},
-    7 => %{style: "balanced", looseness: 4, aggression: 8, bluff: 4},
-    8 => %{style: "calling_station", looseness: 12, aggression: -6, bluff: 1}
+    1 => %{style: "tight",      looseness: -14, aggression: 4,  bluff: 1},
+    2 => %{style: "aggressive", looseness: 12,  aggression: 20, bluff: 9},
+    3 => %{style: "balanced",   looseness: 2,   aggression: 8,  bluff: 3},
+    4 => %{style: "tight",      looseness: -12, aggression: 5,  bluff: 1},
+    5 => %{style: "aggressive", looseness: 14,  aggression: 22, bluff: 11},
+    6 => %{style: "balanced",   looseness: 4,   aggression: 10, bluff: 4},
+    7 => %{style: "tight",      looseness: -16, aggression: 3,  bluff: 0},
+    8 => %{style: "aggressive", looseness: 10,  aggression: 18, bluff: 7}
   }
 
-  @starting_hands %{
-    1 => ["Ah", "Ad"],
-    2 => ["Kh", "Qh"],
-    3 => ["Js", "Jd"],
-    4 => ["9c", "9d"],
-    5 => ["8h", "8d"],
-    6 => ["As", "Kd"],
-    7 => ["Qc", "Qd"],
-    8 => ["7s", "6s"]
-  }
+  @ranks ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"]
+  @suits ["c", "d", "h", "s"]
 
-  @board_by_street %{
-    "preflop" => [],
-    "flop" => ["2h", "7d", "Tc"],
-    "turn" => ["2h", "7d", "Tc", "Qs"],
-    "river" => ["2h", "7d", "Tc", "Qs", "Ac"],
-    "showdown" => ["2h", "7d", "Tc", "Qs", "Ac"]
+  # CFR-derived action probabilities aggregated from Leduc poker training
+  # (exploitability ~0.002 after 10,000 iterations).
+  # Tuples are {fold, passive, aggressive} × 1000.
+  # Bucketing: strength=weak/medium/strong, round=preflop/postflop,
+  #            pair=whether player has a made hand (pair+) on board,
+  #            facing_bet=whether there is a bet to call.
+  # CFR+ policy trained on universal_poker (3-rank, 2-suit, 2 hole cards, 1 board card).
+  # Values are {fold, passive, aggressive} weights out of 1000.
+  # Buckets absent from training (impossible in 3-rank game) retain Leduc fallbacks.
+  @cfr_table %{
+    # --- preflop ---
+    "weak_preflop_nopair_nobet" => {0, 813, 187},
+    "weak_preflop_nopair_bet" => {441, 541, 18},
+    "medium_preflop_nopair_nobet" => {153, 444, 403},
+    "medium_preflop_nopair_bet" => {5, 886, 109},
+    "strong_preflop_nopair_nobet" => {0, 122, 878},
+    "strong_preflop_nopair_bet" => {0, 685, 315},
+    "strong_preflop_pair_nobet" => {167, 166, 667},
+    "strong_preflop_pair_bet" => {241, 538, 221},
+    # --- postflop ---
+    "weak_postflop_nopair_nobet" => {0, 841, 159},
+    "weak_postflop_nopair_bet" => {761, 228, 11},
+    "weak_postflop_pair_nobet" => {0, 110, 890},
+    "weak_postflop_pair_bet" => {2, 531, 467},
+    "medium_postflop_nopair_nobet" => {0, 726, 274},
+    "medium_postflop_nopair_bet" => {764, 182, 54},
+    "medium_postflop_pair_nobet" => {0, 609, 391},
+    "medium_postflop_pair_bet" => {228, 592, 180},
+    "strong_postflop_nopair_nobet" => {0, 783, 217},
+    "strong_postflop_nopair_bet" => {398, 594, 7},
+    "strong_postflop_pair_nobet" => {0, 384, 616},
+    "strong_postflop_pair_bet" => {59, 667, 274}
   }
 
   def start_link(opts) do
@@ -230,6 +252,7 @@ defmodule PokerBackend.Table do
       small_blind_seat: rotate_seat(dealer_seat),
       big_blind_seat: rotate_seat(rotate_seat(dealer_seat)),
       community_cards: [],
+      deck: [],
       action_log: ["Table ready. First hand starting shortly."],
       last_action: "waiting_for_next_hand",
       acted_seats: [],
@@ -283,6 +306,7 @@ defmodule PokerBackend.Table do
           current
           |> Map.put(:name, player_name)
           |> Map.put(:connected, true)
+          |> Map.put(:will_play_next_hand, true)
           |> Map.put(:desired_seat, requested_seat)
         end)
         |> put_in([:last_event], "player_waiting")
@@ -292,22 +316,66 @@ defmodule PokerBackend.Table do
         )
 
       true ->
-        pending_player = %{
-          player_id: player_id,
-          name: player_name,
-          connected: true,
-          will_play_next_hand: false,
-          show_cards: false,
-          desired_seat: requested_seat
-        }
+        seat_player = get_player!(state.players, requested_seat)
 
-        state
-        |> update_in([:pending_players], &(&1 ++ [pending_player]))
-        |> put_in([:last_event], "player_joined_waitlist")
-        |> update_in(
-          [:hand_state, :action_log],
-          &append_log(&1, "#{player_name} reserved seat #{requested_seat}.")
-        )
+        if seat_claim_immediate?(state, seat_player) do
+          replacement_stack =
+            if(seat_player.stack > 0, do: seat_player.stack, else: @starting_stack)
+
+          next_status =
+            cond do
+              replacement_stack <= 0 -> "BUSTED"
+              state.hand_state.status == "in_progress" -> "SITTING_OUT"
+              true -> "READY"
+            end
+
+          next_state =
+            state
+            |> update_player(requested_seat, fn _current ->
+              %{
+                seat: requested_seat,
+                name: player_name,
+                stack: replacement_stack,
+                status: next_status,
+                will_play_next_hand: replacement_stack > 0,
+                show_cards: false,
+                is_bot: false,
+                bot_style: nil,
+                player_id: player_id,
+                connected: true,
+                bet_this_street: 0,
+                contributed_this_hand: 0,
+                hole_cards: [nil, nil]
+              }
+            end)
+            |> put_in([:last_event], "player_joined_seat")
+
+          message =
+            if state.hand_state.status == "in_progress" do
+              "#{player_name} claimed seat #{requested_seat}. Ready for next hand."
+            else
+              "#{player_name} is seated at seat #{requested_seat}."
+            end
+
+          update_in(next_state, [:hand_state, :action_log], &append_log(&1, message))
+        else
+          pending_player = %{
+            player_id: player_id,
+            name: player_name,
+            connected: true,
+            will_play_next_hand: true,
+            show_cards: false,
+            desired_seat: requested_seat
+          }
+
+          state
+          |> update_in([:pending_players], &(&1 ++ [pending_player]))
+          |> put_in([:last_event], "player_joined_waitlist")
+          |> update_in(
+            [:hand_state, :action_log],
+            &append_log(&1, "#{player_name} reserved seat #{requested_seat} for the next hand.")
+          )
+        end
     end
   end
 
@@ -490,9 +558,9 @@ defmodule PokerBackend.Table do
       invalid_action(state, "not_enough_ready_players")
     else
       next_hand_number = state.hand_number + 1
-      next_dealer = rotate_seat(state.hand_state.dealer_seat)
-      sb_seat = rotate_seat(next_dealer)
-      bb_seat = rotate_seat(sb_seat)
+
+      %{dealer: next_dealer, small_blind: sb_seat, big_blind: bb_seat, acting_seat: acting_seat} =
+        next_hand_positions(state.players, state.hand_state.dealer_seat)
 
       players =
         state.players
@@ -500,7 +568,7 @@ defmodule PokerBackend.Table do
         |> post_blind(sb_seat, @small_blind)
         |> post_blind(bb_seat, @big_blind)
 
-      acting_seat = next_actionable_seat(players, bb_seat)
+      {players, deck} = deal_hole_cards(players, next_dealer)
 
       hand_state = %{
         status: "in_progress",
@@ -513,7 +581,8 @@ defmodule PokerBackend.Table do
         dealer_seat: next_dealer,
         small_blind_seat: sb_seat,
         big_blind_seat: bb_seat,
-        community_cards: @board_by_street["preflop"],
+        community_cards: [],
+        deck: deck,
         action_log: [
           "Hand #{next_hand_number} started.",
           "Blinds posted: #{@small_blind} / #{@big_blind}.",
@@ -740,6 +809,10 @@ defmodule PokerBackend.Table do
       conclude_showdown(state)
     else
       players = Enum.map(state.players, &Map.put(&1, :bet_this_street, 0))
+
+      {community_cards, deck} =
+        deal_community_cards(state.hand_state.community_cards, state.hand_state.deck, next_stage)
+
       acting_seat = next_actionable_seat(players, state.hand_state.dealer_seat)
       message = "#{String.capitalize(next_stage)} dealt. Action on seat #{acting_seat || "none"}."
 
@@ -747,7 +820,8 @@ defmodule PokerBackend.Table do
         state
         |> Map.put(:players, players)
         |> put_in([:hand_state, :stage], next_stage)
-        |> put_in([:hand_state, :community_cards], @board_by_street[next_stage])
+        |> put_in([:hand_state, :community_cards], community_cards)
+        |> put_in([:hand_state, :deck], deck)
         |> put_in([:hand_state, :acting_seat], acting_seat)
         |> put_in([:hand_state, :current_bet], 0)
         |> put_in([:hand_state, :acted_seats], [])
@@ -832,7 +906,6 @@ defmodule PokerBackend.Table do
       state.hand_state
       |> Map.put(:status, "complete")
       |> Map.put(:stage, "showdown")
-      |> Map.put(:community_cards, @board_by_street["showdown"])
       |> Map.put(:acting_seat, nil)
       |> Map.put(:winner_seats, winner_seats)
       |> Map.put(:winner_amounts, winner_amounts)
@@ -888,7 +961,7 @@ defmodule PokerBackend.Table do
   end
 
   defp showdown_evaluations(state) do
-    board = @board_by_street["showdown"]
+    board = state.hand_state.community_cards
 
     state.players
     |> Enum.filter(&(&1.status in ["ACTIVE", "ALL_IN"]))
@@ -1027,7 +1100,7 @@ defmodule PokerBackend.Table do
           |> Map.put(:show_cards, player.is_bot)
           |> Map.put(:bet_this_street, 0)
           |> Map.put(:contributed_this_hand, 0)
-          |> Map.put(:hole_cards, Map.get(@starting_hands, player.seat, [nil, nil]))
+          |> Map.put(:hole_cards, [nil, nil])
 
         true ->
           player
@@ -1140,7 +1213,7 @@ defmodule PokerBackend.Table do
   defp score_category(score) when is_tuple(score), do: elem(score, 0)
 
   defp bot_profile_for(%{seat: seat, is_bot: true}), do: Map.fetch!(@bot_profiles, seat)
-  defp bot_profile_for(_player), do: %{style: "balanced", looseness: 0, aggression: 0, bluff: 0}
+  defp bot_profile_for(_player), do: %{style: "balanced", looseness: 2, aggression: 8, bluff: 3}
 
   defp preflop_strength([left, right]) do
     left_rank = parse_card_rank(left)
@@ -1242,101 +1315,12 @@ defmodule PokerBackend.Table do
     clamp(base + draw_bonus(state.hand_state.stage, cards), 20, 100)
   end
 
-  defp board_danger(community_cards) do
-    suit_pressure =
-      community_cards
-      |> card_suits()
-      |> Enum.frequencies()
-      |> Map.values()
-      |> then(&Enum.max([0 | &1]))
-      |> Kernel.-(2)
-      |> max(0)
-      |> Kernel.*(3)
-
-    pair_pressure =
-      if community_cards
-         |> card_ranks()
-         |> Enum.frequencies()
-         |> Map.values()
-         |> Enum.any?(&(&1 >= 2)),
-         do: 4,
-         else: 0
-
-    straight_pressure = if(straight_draw?(community_cards), do: 4, else: 0)
-    high_card_pressure = Enum.count(card_ranks(community_cards), &(&1 >= 12)) * 2
-    suit_pressure + pair_pressure + straight_pressure + high_card_pressure
-  end
-
-  defp seat_distance(from_seat, to_seat) do
-    to_index = Enum.find_index(@seats, &(&1 == to_seat))
-    from_index = Enum.find_index(@seats, &(&1 == from_seat))
-    rem(to_index - from_index + length(@seats), length(@seats))
-  end
-
-  defp position_adjustment(state, player) do
-    cond do
-      player.seat == state.hand_state.small_blind_seat -> -4
-      player.seat == state.hand_state.big_blind_seat -> -2
-      player.seat == state.hand_state.dealer_seat -> 4
-      seat_distance(state.hand_state.dealer_seat, player.seat) >= 5 -> 3
-      true -> 0
-    end
-  end
-
-  defp decision_noise(state, player) do
-    stage_seed =
-      case state.hand_state.stage do
-        "preflop" -> 1
-        "flop" -> 2
-        "turn" -> 3
-        "river" -> 4
-        _ -> 5
-      end
-
-    rem(state.hand_state.hand_number * 13 + player.seat * 7 + stage_seed * 11, 9) - 4
-  end
-
   defp bot_hand_strength(state, player) do
     if state.hand_state.stage == "preflop" do
       preflop_strength(player.hole_cards)
     else
       postflop_strength(state, player)
     end
-  end
-
-  defp call_pressure(state, player, to_call) do
-    pot_odds = div(to_call * 100, max(state.hand_state.pot + to_call, 1))
-    stack_pressure = div(to_call * 100, max(player.stack + to_call, 1))
-    pot_odds + stack_pressure
-  end
-
-  defp semi_bluff_bonus(state, player, profile) do
-    cards = player.hole_cards ++ state.hand_state.community_cards
-    bonus = draw_bonus(state.hand_state.stage, cards)
-
-    cond do
-      bonus == 0 -> 0
-      profile.style == "lag" -> bonus + profile.bluff
-      true -> div(bonus, 2)
-    end
-  end
-
-  defp continue_score(state, player, profile, to_call) do
-    bot_hand_strength(state, player) +
-      profile.looseness +
-      position_adjustment(state, player) +
-      decision_noise(state, player) -
-      board_danger(state.hand_state.community_cards) -
-      call_pressure(state, player, to_call)
-  end
-
-  defp aggression_score(state, player, profile, to_call) do
-    bot_hand_strength(state, player) +
-      profile.aggression +
-      semi_bluff_bonus(state, player, profile) +
-      position_adjustment(state, player) +
-      decision_noise(state, player) -
-      div(call_pressure(state, player, to_call), 2)
   end
 
   defp normalized_raise_target(desired, current_bet, min_raise_target, max_target) do
@@ -1379,46 +1363,120 @@ defmodule PokerBackend.Table do
     normalized_raise_target(desired, current_bet, min_raise_target, max_target)
   end
 
-  defp choose_unopened_bot_action(state, player, profile) do
-    strength = bot_hand_strength(state, player)
+  defp cfr_strength_preflop(score) do
+    cond do
+      score >= 65 -> "strong"
+      score >= 40 -> "medium"
+      true -> "weak"
+    end
+  end
 
-    open_score =
-      strength + profile.looseness + profile.aggression + position_adjustment(state, player) +
-        decision_noise(state, player)
-
-    semi_bluff = semi_bluff_bonus(state, player, profile)
+  defp cfr_postflop_bucket(state, player) do
+    cards = player.hole_cards ++ state.hand_state.community_cards
+    {score, _desc, _best} = HandEvaluator.evaluate(cards)
+    category = score_category(score)
 
     cond do
-      open_score >= 72 or (profile.style == "lag" and strength + semi_bluff >= 52) ->
-        {"bet", %{"amount" => bot_bet_target(state, player, profile, strength)}}
+      category >= 3 -> {"strong", true}
+      category >= 1 -> {"medium", true}
+      true -> {"weak", false}
+    end
+  end
 
-      true ->
-        {"check", %{}}
+  defp cfr_key(strength, stage, has_pair, facing_bet) do
+    round = if stage == "preflop", do: "preflop", else: "postflop"
+    pair_str = if has_pair, do: "pair", else: "nopair"
+    bet_str = if facing_bet, do: "bet", else: "nobet"
+    "#{strength}_#{round}_#{pair_str}_#{bet_str}"
+  end
+
+  defp cfr_profile_adjust({fold, _passive, aggr}, profile) do
+    {fold_shift, aggr_shift} =
+      case profile.style do
+        "tight"      -> {90, -60}
+        "aggressive" -> {-70, 100}
+        _            -> {0, 0}
+      end
+
+    fold_adj = clamp(fold + fold_shift, 0, 1000)
+    aggr_adj = clamp(aggr + aggr_shift, 0, 1000)
+    passive_adj = clamp(1000 - fold_adj - aggr_adj, 0, 1000)
+    {fold_adj, passive_adj, aggr_adj}
+  end
+
+  defp cfr_sample(_state, _player, {fold, passive, _aggr}) do
+    n = :rand.uniform(1000) - 1
+
+    cond do
+      n < fold -> :fold
+      n < fold + passive -> :passive
+      true -> :aggressive
     end
   end
 
   defp choose_bot_action(state, player) do
     profile = bot_profile_for(player)
     to_call = max(state.hand_state.current_bet - player.bet_this_street, 0)
-    strength = bot_hand_strength(state, player)
-    continue = continue_score(state, player, profile, to_call)
-    aggression = aggression_score(state, player, profile, to_call)
+    stage = state.hand_state.stage
+    facing_bet = to_call > 0
 
-    cond do
-      to_call == 0 ->
-        choose_unopened_bot_action(state, player, profile)
+    {strength, has_pair} =
+      if stage == "preflop" do
+        s = preflop_strength(player.hole_cards)
+        {cfr_strength_preflop(s), false}
+      else
+        cfr_postflop_bucket(state, player)
+      end
 
-      aggression >= 82 and bot_raise_target(state, player, profile, strength, to_call) ->
-        {"raise", %{"amount" => bot_raise_target(state, player, profile, strength, to_call)}}
+    key = cfr_key(strength, stage, has_pair, facing_bet)
+    raw = Map.get(@cfr_table, key, {0, 500, 500})
+    probs = cfr_profile_adjust(raw, profile)
+    hand_strength = bot_hand_strength(state, player)
 
-      continue >= 38 ->
-        {"call", %{}}
+    # Stack pressure guard: bots should not casually call off large portions of
+    # their stack with weak or medium hands. Mimics basic pot-odds awareness.
+    stack_committed = if player.stack > 0, do: to_call / player.stack, else: 0.0
 
-      to_call <= @big_blind and profile.style in ["calling_station", "lag"] and continue >= 28 ->
-        {"call", %{}}
+    decision =
+      cond do
+        # Tight bots fold weak hands preflop
+        facing_bet and stage == "preflop" and profile.style == "tight" and hand_strength <= 52 ->
+          :fold
 
-      true ->
-        {"fold", %{}}
+        # Weak hand facing a call of 40%+ of stack → always fold (except aggressive style)
+        facing_bet and stack_committed >= 0.4 and strength == "weak" and
+            profile.style != "aggressive" ->
+          :fold
+
+        # Medium hand facing a near-shove (80%+ of stack) → fold unless aggressive
+        facing_bet and stack_committed >= 0.8 and strength == "medium" and
+            profile.style == "tight" ->
+          :fold
+
+        true ->
+          cfr_sample(state, player, probs)
+      end
+
+    if facing_bet do
+      case decision do
+        :fold ->
+          {"fold", %{}}
+
+        :passive ->
+          {"call", %{}}
+
+        :aggressive ->
+          raise_target = bot_raise_target(state, player, profile, hand_strength, to_call)
+          if raise_target, do: {"raise", %{"amount" => raise_target}}, else: {"call", %{}}
+      end
+    else
+      case decision do
+        :aggressive ->
+          {"bet", %{"amount" => bot_bet_target(state, player, profile, hand_strength)}}
+
+        _ ->
+          {"check", %{}}
+      end
     end
   end
 
@@ -1455,10 +1513,7 @@ defmodule PokerBackend.Table do
       |> Enum.map(& &1.seat)
       |> Enum.sort()
 
-    case seats do
-      [] -> nil
-      _ -> Enum.find(seats, &(&1 > current_seat)) || hd(seats)
-    end
+    next_seat(seats, current_seat)
   end
 
   defp rotate_seat(seat) do
@@ -1469,6 +1524,45 @@ defmodule PokerBackend.Table do
   defp ready_player_count(players) do
     players
     |> Enum.count(fn player -> player.stack > 0 and player.will_play_next_hand end)
+  end
+
+  defp next_hand_positions(players, previous_dealer) do
+    ready_seats =
+      players
+      |> Enum.filter(&(&1.stack > 0 and &1.will_play_next_hand))
+      |> Enum.map(& &1.seat)
+      |> Enum.sort()
+
+    dealer = next_seat(ready_seats, previous_dealer)
+
+    case ready_seats do
+      [_first, _second] ->
+        big_blind = next_seat(ready_seats, dealer)
+
+        %{
+          dealer: dealer,
+          small_blind: dealer,
+          big_blind: big_blind,
+          acting_seat: dealer
+        }
+
+      _ ->
+        small_blind = next_seat(ready_seats, dealer)
+        big_blind = next_seat(ready_seats, small_blind)
+
+        %{
+          dealer: dealer,
+          small_blind: small_blind,
+          big_blind: big_blind,
+          acting_seat: next_seat(ready_seats, big_blind)
+        }
+    end
+  end
+
+  defp next_seat([], _current_seat), do: nil
+
+  defp next_seat(seats, current_seat) do
+    Enum.find(seats, &(&1 > current_seat)) || hd(seats)
   end
 
   defp normalize_player_id(%{"player_id" => player_id}) when is_binary(player_id) do
@@ -1620,6 +1714,72 @@ defmodule PokerBackend.Table do
       true ->
         false
     end
+  end
+
+  defp seat_claim_immediate?(state, seat_player) do
+    empty_seat?(seat_player) or state.hand_state.status != "in_progress"
+  end
+
+  defp deal_hole_cards(players, dealer_seat) do
+    active_seats = active_hand_seats(players)
+
+    ordered_seats =
+      case active_seats do
+        [_, _] ->
+          ordered_seats_from(active_seats, dealer_seat)
+
+        _ ->
+          first_seat = next_seat(active_seats, dealer_seat)
+          ordered_seats_from(active_seats, first_seat)
+      end
+
+    deck = shuffled_deck()
+
+    {cards_by_seat, deck} =
+      Enum.reduce(1..2, {%{}, deck}, fn _round, {cards_acc, deck_acc} ->
+        Enum.reduce(ordered_seats, {cards_acc, deck_acc}, fn seat, {seat_acc, [card | rest]} ->
+          {Map.update(seat_acc, seat, [card], &(&1 ++ [card])), rest}
+        end)
+      end)
+
+    dealt_players =
+      Enum.map(players, fn player ->
+        Map.put(player, :hole_cards, Map.get(cards_by_seat, player.seat, [nil, nil]))
+      end)
+
+    {dealt_players, deck}
+  end
+
+  defp deal_community_cards(board, deck, next_stage) do
+    draw_count =
+      case next_stage do
+        "flop" -> 3
+        "turn" -> 1
+        "river" -> 1
+        _ -> 0
+      end
+
+    {drawn_cards, remaining_deck} = Enum.split(deck, draw_count)
+    {board ++ drawn_cards, remaining_deck}
+  end
+
+  defp shuffled_deck do
+    for(rank <- @ranks, suit <- @suits, do: rank <> suit)
+    |> Enum.shuffle()
+  end
+
+  defp active_hand_seats(players) do
+    players
+    |> Enum.filter(&(&1.status in ["ACTIVE", "ALL_IN"]))
+    |> Enum.map(& &1.seat)
+    |> Enum.sort()
+  end
+
+  defp ordered_seats_from([], _start_seat), do: []
+
+  defp ordered_seats_from(seats, start_seat) do
+    {before_start, from_start} = Enum.split_while(seats, &(&1 < start_seat))
+    from_start ++ before_start
   end
 
   defp materialize_pending_players(state) do

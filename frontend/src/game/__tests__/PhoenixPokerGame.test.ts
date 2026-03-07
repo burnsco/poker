@@ -16,6 +16,7 @@ function buildTable(overrides: Partial<BackendTable> = {}): BackendTable {
 				player_id: "player-test-1",
 				connected: true,
 				bet_this_street: 20,
+				contributed_this_hand: 20,
 				hole_cards: ["Ah", "Ad"],
 			},
 			{
@@ -28,6 +29,7 @@ function buildTable(overrides: Partial<BackendTable> = {}): BackendTable {
 				player_id: null,
 				connected: false,
 				bet_this_street: 20,
+				contributed_this_hand: 20,
 				hole_cards: ["Kh", "Qh"],
 			},
 		],
@@ -61,10 +63,16 @@ function buildTable(overrides: Partial<BackendTable> = {}): BackendTable {
 
 describe("PhoenixPokerGame", () => {
 	test("startRound sends next_hand to the backend action handler", async () => {
-		const actions: Array<{ action: string; payload?: { amount?: number; seat?: number } }> = [];
-		const game = new PhoenixPokerGame("player-test-1", async (action, payload) => {
-			actions.push({ action, payload });
-		});
+		const actions: Array<{
+			action: string;
+			payload?: { amount?: number; seat?: number };
+		}> = [];
+		const game = new PhoenixPokerGame(
+			"player-test-1",
+			async (action, payload) => {
+				actions.push({ action, payload });
+			},
+		);
 
 		await game.startRound();
 

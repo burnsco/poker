@@ -686,7 +686,7 @@ function TableScreen({
 		logControlDebug(`slider: value=${slider.value}`);
 	}, [syncSliderDisplay]);
 	const handleSliderPreset = useCallback(
-		(preset: "min" | "half" | "pot" | "max") => {
+		(preset: "min" | "halfpot" | "pot" | "max") => {
 			const slider = document.getElementById(
 				"bet-slider",
 			) as HTMLInputElement | null;
@@ -701,10 +701,14 @@ function TableScreen({
 				return;
 			}
 
-			if (preset === "half") {
-				const value = Math.floor((min + max) / 2);
+			if (preset === "halfpot") {
+				const potStr = document.getElementById("total-pot")?.textContent || "0";
+				const potVal = Number.parseInt(potStr.replace(/[^\d]/g, ""), 10) || 0;
+				const value = Math.min(Math.max(Math.round(potVal * 0.5), min), max);
 				setSliderValue(value);
-				logControlDebug(`preset:half -> ${value} (min=${min} max=${max})`);
+				logControlDebug(
+					`preset:halfpot -> ${value} (pot=${potVal} min=${min} max=${max})`,
+				);
 				return;
 			}
 
@@ -721,6 +725,23 @@ function TableScreen({
 
 			setSliderValue(max);
 			logControlDebug(`preset:max -> ${max}`);
+		},
+		[setSliderValue],
+	);
+
+	const handleSliderPresetBB = useCallback(
+		(multiplier: number) => {
+			const slider = document.getElementById(
+				"bet-slider",
+			) as HTMLInputElement | null;
+			if (!slider) return;
+			const bigBlind = gameRef.current?.view.bigBlind ?? 20;
+			const min = Number.parseInt(slider.min, 10) || 0;
+			const max = Number.parseInt(slider.max, 10) || min;
+			const target = Math.round(bigBlind * multiplier);
+			const value = Math.min(Math.max(target, min), max);
+			setSliderValue(value);
+			logControlDebug(`preset:${multiplier}bb -> ${value} (bb=${bigBlind})`);
 		},
 		[setSliderValue],
 	);
@@ -1038,12 +1059,19 @@ function TableScreen({
 							const backendPlayer = backendTable?.players.find(
 								(player) => player.seat === backendSeat,
 							);
+							const queuedSeatClaim =
+								backendPlayer?.is_bot &&
+								(backendPlayer.stack > 0 ||
+									backendTable?.hand_state.status === "in_progress");
 							const canClaimSeat =
 								!ownedPlayer &&
 								!pendingPlayer &&
 								backendPlayer?.is_bot &&
 								!reservedSeats.has(backendSeat);
 							const reservedSeatLabel = reservedSeatLabels.get(backendSeat);
+							const claimButtonLabel = queuedSeatClaim
+								? `Join Seat ${backendSeat} Next Hand`
+								: `Take Seat ${backendSeat}`;
 
 							return (
 								<div className="seat-slot" key={playerId}>
@@ -1097,7 +1125,7 @@ function TableScreen({
 														)
 													}
 												>
-													Take Seat {backendSeat}
+													{claimButtonLabel}
 												</button>
 											) : reservedSeatLabel ? (
 												<div className="seat-reserved-badge">
@@ -1121,119 +1149,51 @@ function TableScreen({
 				className="controls-container glass-panel anim-slide-up"
 				style={{ animationDelay: "0.2s" }}
 			>
-				<div className="table-seat-controls">
-					{ownedPlayer ? (
-						<>
-							<div className="seat-control-copy">
-								<span>Your seat</span>
-								<strong>
-									{ownedPlayer.name} at seat {ownedPlayer.seat}
-								</strong>
-								<p>
-									{ownedPlayer.will_play_next_hand
-										? "You are seated and will be dealt into the next hand after the 5 second pause."
-										: "You are still seated at this table, but you are sitting out until you opt back in."}
-								</p>
-							</div>
-							<div className="seat-control-actions">
-								<button
-									type="button"
-									className="btn"
-									onClick={() =>
-										void sendActionWithDebug(
-											ownedPlayer.will_play_next_hand ? "sit_out" : "sit_in",
-											undefined,
-											"seat-control",
-										)
-									}
-								>
-									{ownedPlayer.will_play_next_hand
-										? "Sit Out"
-										: "Play Next Hand"}
-								</button>
-							</div>
-						</>
-					) : pendingPlayer ? (
-						<>
-							<div className="seat-control-copy">
-								<span>Waiting for seat</span>
-								<strong>
-									{pendingPlayer.name} for seat {pendingPlayer.desired_seat}
-								</strong>
-								<p>
-									{pendingPlayer.will_play_next_hand
-										? "You are queued for the next available seat and will be dealt in when assigned."
-										: "You are on the waitlist. Opt in when you want the next available seat."}
-								</p>
-							</div>
+				<div className="controls-top">
+					<div className="action-state" id="action-state">
+						Waiting for action...
+					</div>
+					<div className="controls-strip-actions">
+						{ownedPlayer ? (
 							<button
 								type="button"
-								className="btn"
+								className="btn tiny"
 								onClick={() =>
 									void sendActionWithDebug(
-										pendingPlayer.will_play_next_hand ? "sit_out" : "sit_in",
+										ownedPlayer.will_play_next_hand ? "sit_out" : "sit_in",
 										undefined,
 										"seat-control",
 									)
 								}
 							>
-								{pendingPlayer.will_play_next_hand
-									? "Wait Without Playing"
-									: "Play When Seated"}
+								{ownedPlayer.will_play_next_hand ? "Sit Out" : "Sit In"}
 							</button>
-						</>
-					) : (
-						<div className="seat-control-copy">
-							<span>Choose seat</span>
-							<strong>Click an open seat on the table</strong>
-							<p>
-								Join any open seat now. If a bot is there, you will replace it
-								at a safe swap point.
-							</p>
-						</div>
-					)}
-				</div>
-
-				{isCustomTable ? (
-					<div className="table-setup-controls">
-						<div className="seat-control-copy">
-							<span>Table setup</span>
-							<strong>Build this game one seat at a time</strong>
-							<p>
-								{botSeats} bots active, {emptySeatCount} open seats.
-							</p>
-						</div>
-						<div className="seat-control-actions">
-							<button
-								type="button"
-								className="btn"
-								disabled={!canAddBot}
-								onClick={() =>
-									void sendActionWithDebug("add_bot", undefined, "table-setup")
-								}
-							>
-								Add Bot
-							</button>
-							<button
-								type="button"
-								className="btn tiny"
-								disabled={!canClearTable}
-								onClick={() =>
-									void sendActionWithDebug(
-										"clear_table",
-										undefined,
-										"table-setup",
-									)
-								}
-							>
-								Empty Table
-							</button>
-						</div>
-					</div>
-				) : null}
-
-				{backendTable?.game_state === "waiting_for_hand" && readySeats >= 2 ? (
-					<div className="between-hand-actions">
+						) : pendingPlayer ? (
+							<>
+								<span className="controls-strip-hint">
+									{pendingPlayer.will_play_next_hand
+										? `Queued for seat ${pendingPlayer.desired_seat} next hand`
+										: `Waiting: seat ${pendingPlayer.desired_seat}`}
+								</span>
+								<button
+									type="button"
+									className="btn tiny"
+									onClick={() =>
+										void sendActionWithDebug(
+											pendingPlayer.will_play_next_hand ? "sit_out" : "sit_in",
+											undefined,
+											"seat-control",
+										)
+									}
+								>
+									{pendingPlayer.will_play_next_hand
+										? "Sit Out"
+										: "Play Next Hand"}
+								</button>
+							</>
+						) : (
+							<span className="controls-strip-hint">Click a seat to join</span>
+						)}
 						{canRevealCompletedHand ? (
 							<button
 								type="button"
@@ -1249,73 +1209,122 @@ function TableScreen({
 								{ownedPlayer.show_cards ? "Hide Cards" : "Show Cards"}
 							</button>
 						) : null}
+						{isCustomTable &&
+						backendTable?.hand_state.status !== "in_progress" ? (
+							<>
+								<button
+									type="button"
+									className="btn tiny"
+									disabled={!canAddBot}
+									onClick={() =>
+										void sendActionWithDebug(
+											"add_bot",
+											undefined,
+											"table-setup",
+										)
+									}
+								>
+									+ Bot
+								</button>
+								<button
+									type="button"
+									className="btn tiny"
+									disabled={!canClearTable}
+									onClick={() =>
+										void sendActionWithDebug(
+											"clear_table",
+											undefined,
+											"table-setup",
+										)
+									}
+								>
+									Clear
+								</button>
+							</>
+						) : null}
+						{backendTable?.game_state === "waiting_for_hand" &&
+						readySeats >= 2 ? (
+							<button
+								type="button"
+								className="btn primary tiny"
+								onClick={() =>
+									void sendActionWithDebug("next_hand", undefined, "manual")
+								}
+							>
+								Next Hand
+							</button>
+						) : null}
+					</div>
+				</div>
+
+				<div className="bet-sizing-row">
+					<div className="preset-group">
 						<button
 							type="button"
-							className="btn primary"
-							onClick={() =>
-								void sendActionWithDebug("next_hand", undefined, "manual")
-							}
+							className="preset-btn bb-preset"
+							id="btn-min"
+							onClick={() => handleSliderPreset("min")}
 						>
-							Start Next Hand
+							Min
+						</button>
+						<button
+							type="button"
+							className="preset-btn bb-preset"
+							onClick={() => handleSliderPresetBB(2)}
+						>
+							2BB
+						</button>
+						<button
+							type="button"
+							className="preset-btn bb-preset"
+							onClick={() => handleSliderPresetBB(3)}
+						>
+							3BB
 						</button>
 					</div>
-				) : null}
-
-				<div className="action-state" id="action-state">
-					Waiting for action...
-				</div>
-
-				<div className="bet-slider-container">
-					<input
-						type="range"
-						id="bet-slider"
-						min="0"
-						max="1000"
-						defaultValue="0"
-						onInput={handleSliderInput}
-					/>
-					<span id="bet-amount-display">🪙 0</span>
-				</div>
-
-				<div className="btn-group">
+					<div className="preset-sep" />
+					<div className="preset-group">
+						<button
+							type="button"
+							className="preset-btn pot-preset"
+							onClick={() => handleSliderPreset("halfpot")}
+						>
+							½ Pot
+						</button>
+						<button
+							type="button"
+							className="preset-btn pot-preset"
+							id="btn-pot"
+							onClick={() => handleSliderPreset("pot")}
+						>
+							Pot
+						</button>
+					</div>
+					<div className="slider-zone">
+						<input
+							type="range"
+							id="bet-slider"
+							min="0"
+							max="1000"
+							defaultValue="0"
+							onInput={handleSliderInput}
+						/>
+						<span id="bet-amount-display">🪙 0</span>
+					</div>
 					<button
 						type="button"
-						className="btn tiny"
-						id="btn-min"
-						onClick={() => handleSliderPreset("min")}
-					>
-						Min
-					</button>
-					<button
-						type="button"
-						className="btn tiny"
-						id="btn-half"
-						onClick={() => handleSliderPreset("half")}
-					>
-						1/2
-					</button>
-					<button
-						type="button"
-						className="btn tiny"
-						id="btn-pot"
-						onClick={() => handleSliderPreset("pot")}
-					>
-						Pot
-					</button>
-					<button
-						type="button"
-						className="btn tiny"
+						className="preset-btn allin-preset"
 						id="btn-max"
 						onClick={() => handleSliderPreset("max")}
 					>
-						Max
+						All-in
 					</button>
 				</div>
 
 				<div className="main-actions">
 					<button
 						type="button"
-						className="btn danger"
+						className="btn action-fold danger"
 						id="btn-fold"
 						onClick={handleFoldClick}
 					>
@@ -1323,7 +1332,7 @@ function TableScreen({
 					</button>
 					<button
 						type="button"
-						className="btn"
+						className="btn action-call"
 						id="btn-call"
 						data-action="check"
 						onClick={handleCallClick}
@@ -1332,7 +1341,7 @@ function TableScreen({
 					</button>
 					<button
 						type="button"
-						className="btn primary"
+						className="btn action-raise primary"
 						id="btn-raise"
 						data-action="bet"
 						onClick={handleRaiseClick}

@@ -110,10 +110,36 @@ export class Renderer {
 		}
 	}
 
+	private renderChipStack(amount: number): string {
+		const denominations = [
+			{ value: 500, cls: "chip-purple" },
+			{ value: 100, cls: "chip-black" },
+			{ value: 25, cls: "chip-green" },
+			{ value: 5, cls: "chip-red" },
+			{ value: 1, cls: "chip-white" },
+		] as const;
+
+		const chips: string[] = [];
+		let rem = amount;
+
+		outer: for (const { value, cls } of denominations) {
+			for (let i = 0; i < 4 && rem >= value; i++) {
+				chips.push(`<div class="chip ${cls}"></div>`);
+				rem -= value;
+				if (chips.length >= 5) break outer;
+			}
+		}
+
+		if (chips.length === 0) chips.push('<div class="chip chip-white"></div>');
+
+		return `<div class="bet-label">${amount}</div><div class="chip-stack">${chips.join("")}</div>`;
+	}
+
 	private updatePlayerArea(
 		seatIndex: number,
 		player: ClientPlayer | null,
-		isShowdown: boolean,
+		showAllCards: boolean,
+		winnerSeats: Set<number>,
 	) {
 		const playerId = `p${seatIndex + 1}`;
 		const area = document.getElementById(
@@ -141,11 +167,13 @@ export class Renderer {
 
 		if (!player) {
 			area.classList.add("is-empty");
-			area.classList.remove("is-active", "is-folded", "is-busted");
+			area.classList.remove("is-active", "is-folded", "is-busted", "is-winner");
 			avatarEl.textContent = (seatIndex + 1).toString();
 			nameEl.textContent = `Seat ${seatIndex + 1}`;
 			chipsEl.textContent = "Open seat";
 			cardsEl.innerHTML = "";
+			cardsEl.classList.remove("is-folded");
+			cardsEl.classList.remove("is-winner");
 			statusEl.textContent = "";
 			betEl.classList.remove("visible");
 			betEl.textContent = "";
@@ -161,10 +189,14 @@ export class Renderer {
 		const isSittingOut = player.status === "SITTING_OUT";
 		const isReady = player.status === "READY";
 		const isOut = isFolded || isBusted || isSittingOut;
+		const isWinner = winnerSeats.has(player.seat);
 
 		area.classList.toggle("is-active", isActive);
 		area.classList.toggle("is-folded", isFolded);
 		area.classList.toggle("is-busted", isBusted);
+		area.classList.toggle("is-winner", isWinner);
+		cardsEl.classList.toggle("is-folded", isFolded);
+		cardsEl.classList.toggle("is-winner", isWinner);
 
 		avatarEl.textContent = this.avatarText(player.name, isYou);
 
@@ -177,9 +209,11 @@ export class Renderer {
 			? `${player.name} (${markers.join(" | ")})`
 			: player.name;
 
-		chipsEl.innerHTML = `🪙 ${player.stack}<br><span class="bet-line">Bet: 🪙${player.betThisStreet}</span>`;
+		chipsEl.textContent = `🪙 ${player.stack}`;
 
-		if (isOut) {
+		if (isWinner) {
+			statusEl.textContent = "Winner";
+		} else if (isOut) {
 			statusEl.textContent = isFolded
 				? "Folded"
 				: isSittingOut
@@ -200,14 +234,14 @@ export class Renderer {
 		let cardsToRender: Array<string | null> = [null, null];
 
 		if (player.hand && player.hand.length > 0) {
-			if (isYou || isShowdown) {
+			if (isYou || showAllCards) {
 				cardsToRender = player.hand as Array<string | null>;
 			} else {
 				cardsToRender = player.hand.map(() => null);
 			}
 		}
 
-		if (isFolded || isBusted || isSittingOut || isReady) {
+		if ((isFolded || isBusted || isSittingOut || isReady) && !showAllCards) {
 			cardsToRender = [];
 		}
 
@@ -219,23 +253,29 @@ export class Renderer {
 				.join("");
 		}
 
-		const betAmount = player.betThisStreet || 0;
-		if (betAmount > 0 && !isOut) {
+		const betAmount = player.contributedThisHand || 0;
+		if (betAmount > 0) {
 			betEl.classList.add("visible");
-			betEl.textContent = `🪙 ${betAmount}`;
+			betEl.innerHTML = this.renderChipStack(betAmount);
 		} else {
 			betEl.classList.remove("visible");
-			betEl.textContent = "";
+			betEl.innerHTML = "";
 		}
 	}
 
 	update() {
 		const s = this.game.view;
 		const players = s.players;
-		const isShowdown = s.street === "SHOWDOWN";
+		const showAllCards = s.street === "SHOWDOWN" || s.winners !== null;
+		const winnerSeats = new Set((s.winners ?? []).map((winner) => winner.seat));
 
 		for (let seat = 0; seat < this.game.config.maxPlayers; seat += 1) {
-			this.updatePlayerArea(seat, players[seat] || null, isShowdown);
+			this.updatePlayerArea(
+				seat,
+				players[seat] || null,
+				showAllCards,
+				winnerSeats,
+			);
 		}
 
 		const totalPot =
@@ -296,7 +336,7 @@ export class Renderer {
 		const heroActive =
 			heroSeatIndex != null &&
 			s.actionTo === heroSeatIndex &&
-			!isShowdown &&
+			!showAllCards &&
 			heroPlayer &&
 			heroPlayer.status === "ACTIVE";
 
@@ -361,7 +401,7 @@ export class Renderer {
 		if (s.winners !== null) {
 			actionStateEl.textContent =
 				"Hand complete. Next hand starts in 5 seconds.";
-		} else if (isShowdown) {
+		} else if (s.street === "SHOWDOWN") {
 			actionStateEl.textContent = "Showdown in progress...";
 		} else if (!heroPlayer) {
 			actionStateEl.textContent = "Join the game to take the open seat.";

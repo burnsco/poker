@@ -1,0 +1,4 @@
+# OpenSpiel for poker bot training
+# See: https://github.com/google-deepmind/open_spiel
+open_spiel>=1.2.0
+absl-py>=1.0.0

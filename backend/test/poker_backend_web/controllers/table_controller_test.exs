@@ -17,6 +17,15 @@ defmodule PokerBackendWeb.TableControllerTest do
     |> json_response(200)
   end
 
+  defp dealt_cards(state) do
+    hole_cards =
+      state["players"]
+      |> Enum.flat_map(fn player -> player["hole_cards"] || [] end)
+      |> Enum.reject(&is_nil/1)
+
+    hole_cards ++ state["hand_state"]["community_cards"]
+  end
+
   test "rejects illegal actions and preserves turn state" do
     table_id = unique_table_id()
     _ = fetch_table(table_id)
@@ -75,6 +84,8 @@ defmodule PokerBackendWeb.TableControllerTest do
     preflop = action(table_id, "next_hand")
     assert preflop["hand_state"]["stage"] == "preflop"
     assert preflop["hand_state"]["acting_seat"] == 5
+    assert length(dealt_cards(preflop)) == 16
+    assert Enum.uniq(dealt_cards(preflop)) == dealt_cards(preflop)
 
     action(table_id, "call")
     action(table_id, "call")
@@ -87,7 +98,8 @@ defmodule PokerBackendWeb.TableControllerTest do
 
     assert flop["hand_state"]["stage"] == "flop"
     assert flop["hand_state"]["acting_seat"] == 3
-    assert flop["hand_state"]["community_cards"] == ["2h", "7d", "Tc"]
+    assert length(flop["hand_state"]["community_cards"]) == 3
+    assert Enum.uniq(dealt_cards(flop)) == dealt_cards(flop)
 
     action(table_id, "check")
     action(table_id, "check")
@@ -100,7 +112,8 @@ defmodule PokerBackendWeb.TableControllerTest do
 
     assert turn["hand_state"]["stage"] == "turn"
     assert turn["hand_state"]["acting_seat"] == 3
-    assert turn["hand_state"]["community_cards"] == ["2h", "7d", "Tc", "Qs"]
+    assert length(turn["hand_state"]["community_cards"]) == 4
+    assert Enum.uniq(dealt_cards(turn)) == dealt_cards(turn)
 
     action(table_id, "check")
     action(table_id, "check")
@@ -113,7 +126,8 @@ defmodule PokerBackendWeb.TableControllerTest do
 
     assert river["hand_state"]["stage"] == "river"
     assert river["hand_state"]["acting_seat"] == 3
-    assert river["hand_state"]["community_cards"] == ["2h", "7d", "Tc", "Qs", "Ac"]
+    assert length(river["hand_state"]["community_cards"]) == 5
+    assert Enum.uniq(dealt_cards(river)) == dealt_cards(river)
 
     action(table_id, "check")
     action(table_id, "check")
@@ -127,9 +141,9 @@ defmodule PokerBackendWeb.TableControllerTest do
     assert showdown["game_state"] == "waiting_for_hand"
     assert showdown["hand_state"]["status"] == "complete"
     assert showdown["hand_state"]["stage"] == "showdown"
-    assert length(showdown["hand_state"]["winner_seats"]) == 1
-    winning_seat = List.first(showdown["hand_state"]["winner_seats"])
-    assert showdown["hand_state"]["winner_amounts"][Integer.to_string(winning_seat)] == 160
+    assert length(showdown["hand_state"]["community_cards"]) == 5
+    assert showdown["hand_state"]["winner_seats"] != []
+    assert Enum.sum(Map.values(showdown["hand_state"]["winner_amounts"])) == 160
   end
 
   test "supports clearing a table and adding bots one at a time" do
@@ -149,5 +163,81 @@ defmodule PokerBackendWeb.TableControllerTest do
 
     assert seat_four["is_bot"]
     assert seat_four["stack"] == 5000
+  end
+
+  test "seats a human immediately and deals them into the next hand" do
+    table_id = unique_table_id()
+    _ = fetch_table(table_id)
+
+    action(table_id, "clear_table")
+    action(table_id, "add_bot", %{"seat" => 1})
+
+    seated =
+      action(table_id, "join_game", %{
+        "player_id" => "player-1",
+        "player_name" => "Hero",
+        "seat" => 2
+      })
+
+    hero = Enum.find(seated["players"], &(&1["player_id"] == "player-1"))
+
+    assert hero["seat"] == 2
+    assert hero["status"] == "READY"
+    assert hero["will_play_next_hand"]
+
+    started = action(table_id, "next_hand", %{"player_id" => "player-1"})
+    hero_in_hand = Enum.find(started["players"], &(&1["player_id"] == "player-1"))
+
+    assert hero_in_hand["status"] == "ACTIVE"
+    assert Enum.all?(hero_in_hand["hole_cards"], &(is_binary(&1) and byte_size(&1) == 2))
+  end
+
+  test "starts sparse heads-up tables with blinds on occupied seats" do
+    table_id = unique_table_id()
+    _ = fetch_table(table_id)
+
+    action(table_id, "clear_table")
+    action(table_id, "add_bot", %{"seat" => 1})
+
+    action(table_id, "join_game", %{
+      "player_id" => "player-heads-up",
+      "player_name" => "Hero",
+      "seat" => 4
+    })
+
+    started = action(table_id, "next_hand", %{"player_id" => "player-heads-up"})
+    hero = Enum.find(started["players"], &(&1["player_id"] == "player-heads-up"))
+    bot = Enum.find(started["players"], &(&1["seat"] == 1))
+
+    assert started["hand_state"]["dealer_seat"] == 4
+    assert started["hand_state"]["small_blind_seat"] == 4
+    assert started["hand_state"]["big_blind_seat"] == 1
+    assert started["hand_state"]["acting_seat"] == 4
+    assert hero["bet_this_street"] == 10
+    assert bot["bet_this_street"] == 20
+
+    called = action(table_id, "call", %{"player_id" => "player-heads-up"})
+
+    assert called["last_event"] == "Seat 4 calls 10."
+    assert called["hand_state"]["acting_seat"] == 1
+  end
+
+  test "queues a human for the next hand when claiming a bot seat mid-hand" do
+    table_id = unique_table_id()
+    _ = fetch_table(table_id)
+
+    action(table_id, "next_hand")
+
+    queued =
+      action(table_id, "join_game", %{
+        "player_id" => "player-queue",
+        "player_name" => "Hero",
+        "seat" => 2
+      })
+
+    pending = Enum.find(queued["pending_players"], &(&1["player_id"] == "player-queue"))
+
+    assert pending["desired_seat"] == 2
+    assert pending["will_play_next_hand"]
   end
 end

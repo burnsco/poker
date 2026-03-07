@@ -36,6 +36,7 @@ export type ClientPlayer = {
 	willPlayNextHand: boolean;
 	showCards: boolean;
 	betThisStreet: number;
+	contributedThisHand: number;
 	hand: Array<string | null>;
 };
 
@@ -200,6 +201,7 @@ export class PhoenixPokerGame {
 				}
 
 				const betThisStreet = backendPlayer.bet_this_street ?? 0;
+				const contributedThisHand = backendPlayer.contributed_this_hand ?? 0;
 				currentBets.set(index, betThisStreet);
 
 				const holeCards = (backendPlayer.hole_cards ?? [null, null]).map(
@@ -226,6 +228,7 @@ export class PhoenixPokerGame {
 					willPlayNextHand: backendPlayer.will_play_next_hand,
 					showCards: backendPlayer.show_cards,
 					betThisStreet,
+					contributedThisHand,
 					hand: holeCards,
 				};
 			},
