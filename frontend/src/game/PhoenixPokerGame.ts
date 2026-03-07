@@ -12,7 +12,12 @@ export type PokerSoundEvent =
 	| { type: "street_turn" }
 	| { type: "street_river" }
 	| { type: "street_showdown" }
-	| { type: "pot_awarded"; winners: number };
+	| { type: "show" }
+	| { type: "muck" }
+	| { type: "timeout" }
+	| { type: "uncalled_bet_returned" }
+	| { type: "add_chips" }
+	| { type: "pot_awarded"; winners: number; heroOutcome?: string };
 
 export interface HandResultSummary {
 	heading: string;
@@ -44,6 +49,7 @@ export type ClientState = {
 	players: Array<ClientPlayer | null>;
 	actionTo: number | null;
 	street: "PREFLOP" | "FLOP" | "TURN" | "RIVER" | "SHOWDOWN";
+	handNumber: number | null;
 	pots: Array<{ amount: number }>;
 	currentBets: Map<number, number>;
 	smallBlind: number;
@@ -52,6 +58,8 @@ export type ClientState = {
 	board: string[];
 	winners: Array<{ seat: number; amount: number }> | null;
 	buttonSeat: number;
+	smallBlindSeat: number | null;
+	bigBlindSeat: number | null;
 	handEndMode: "fold" | "showdown" | null;
 	manualStartRequired: boolean;
 };
@@ -131,6 +139,42 @@ export class PhoenixPokerGame {
 				type: "turn_start",
 				seat: table.hand_state.acting_seat - 1,
 			});
+		}
+
+		if (previous) {
+			let emittedActionSound = false;
+			const prevLogLen = previous.hand_state.action_log?.length ?? 0;
+			const nextLogLen = table.hand_state.action_log?.length ?? 0;
+			if (nextLogLen > prevLogLen) {
+				const newLogs = table.hand_state.action_log.slice(prevLogLen);
+				for (const log of newLogs) {
+					const soundEvent = this.mapActionSoundEvent(log);
+					if (soundEvent) {
+						this.onSoundEvent(soundEvent);
+						emittedActionSound = true;
+					}
+				}
+			}
+
+			if (!emittedActionSound && previousLastEvent !== nextLastEvent) {
+				const soundEvent = this.mapActionSoundEvent(nextLastEvent);
+				if (soundEvent) {
+					this.onSoundEvent(soundEvent);
+				}
+			}
+
+			if (
+				previous.hand_state.status !== table.hand_state.status &&
+				table.hand_state.status === "complete"
+			) {
+				const outcome = table.hand_state.hand_result?.hero_outcome;
+				const winners = table.hand_state.winner_seats?.length ?? 0;
+				this.onSoundEvent({
+					type: "pot_awarded",
+					winners,
+					heroOutcome: outcome,
+				});
+			}
 		}
 
 		const log = this.actionLogEntries;
@@ -270,6 +314,7 @@ export class PhoenixPokerGame {
 					? table.hand_state.acting_seat - 1
 					: null,
 			street: stage,
+			handNumber: table?.hand_state.hand_number ?? null,
 			pots: [{ amount: potBase }],
 			currentBets,
 			smallBlind: this.config.smallBlind,
@@ -278,6 +323,14 @@ export class PhoenixPokerGame {
 			board: table?.hand_state.community_cards ?? [],
 			winners: table?.hand_state.status === "complete" ? winners : null,
 			buttonSeat: (table?.hand_state.dealer_seat ?? 1) - 1,
+			smallBlindSeat:
+				table?.hand_state.small_blind_seat != null
+					? table.hand_state.small_blind_seat - 1
+					: null,
+			bigBlindSeat:
+				table?.hand_state.big_blind_seat != null
+					? table.hand_state.big_blind_seat - 1
+					: null,
 			handEndMode,
 			manualStartRequired: this.manualStartRequired(table),
 		};
@@ -306,6 +359,43 @@ export class PhoenixPokerGame {
 		if (lastEvent === "turn_dealt") return { type: "street_turn" };
 		if (lastEvent === "river_dealt") return { type: "street_river" };
 		return null;
+	}
+
+	private mapActionSoundEvent(text: string): PokerSoundEvent | null {
+		const seat = this.parseSeatIndex(text);
+		if (/folds\./i.test(text) && seat != null) return { type: "fold", seat };
+		if (/checks\./i.test(text) && seat != null) return { type: "check", seat };
+		if (/calls \d+\./i.test(text) && seat != null)
+			return { type: "call", seat };
+
+		const betAmount = text.match(/bets (\d+)\./i)?.[1];
+		if (betAmount && seat != null) {
+			return {
+				type: "bet",
+				seat,
+				amount: Number.parseInt(betAmount, 10),
+			};
+		}
+
+		const raiseAmount = text.match(/raises to (\d+)\./i)?.[1];
+		if (raiseAmount && seat != null) {
+			return {
+				type: "raise",
+				seat,
+				amount: Number.parseInt(raiseAmount, 10),
+			};
+		}
+
+		if (/shown their cards\./i.test(text)) return { type: "show" };
+		if (/hidden their cards\./i.test(text)) return { type: "muck" };
+		return null;
+	}
+
+	private parseSeatIndex(text: string): number | null {
+		const seatText = text.match(/Seat (\d+)/i)?.[1];
+		if (!seatText) return null;
+		const seat = Number.parseInt(seatText, 10);
+		return Number.isNaN(seat) ? null : seat - 1;
 	}
 
 	private replaceSeatLabels(line: string): string {

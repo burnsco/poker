@@ -8,6 +8,8 @@ export class PokerSoundEngine {
 	private masterGain: GainNode | null = null;
 	private noiseBuffer: AudioBuffer | null = null;
 	private dealAudio: HTMLAudioElement | null = null;
+	private resumePromise: Promise<void> | null = null;
+	private readonly pendingEvents: PokerSoundEvent[] = [];
 	private unlocked = false;
 	private readonly unlockListeners: Array<
 		[keyof DocumentEventMap, EventListener]
@@ -25,14 +27,36 @@ export class PokerSoundEngine {
 			}
 		}
 		this.unlockListeners.length = 0;
+		this.pendingEvents.length = 0;
+		this.resumePromise = null;
+		this.unlocked = false;
+		this.dealAudio?.pause();
+		this.dealAudio = null;
+		this.masterGain = null;
+		this.noiseBuffer = null;
+		const ctx = this.audioContext;
+		this.audioContext = null;
+		if (ctx) {
+			void ctx.close().catch(() => {});
+		}
 	}
 
 	play(event: PokerSoundEvent) {
 		const ctx = this.ensureContext();
 		if (!ctx || !this.masterGain) return;
-		if (!this.unlocked || ctx.state !== "running") return;
+		if (ctx.state === "running" && !this.unlocked) {
+			this.unlocked = true;
+		}
+		if (!this.unlocked || ctx.state !== "running") {
+			this.enqueuePendingEvent(event);
+			this.requestResume(ctx);
+			return;
+		}
 
-		const now = ctx.currentTime;
+		this.playNow(event, ctx.currentTime);
+	}
+
+	private playNow(event: PokerSoundEvent, now: number) {
 		switch (event.type) {
 			case "hand_start":
 				this.playShuffle(now);
@@ -82,7 +106,14 @@ export class PokerSoundEngine {
 				this.playShowdown(now);
 				break;
 			case "pot_awarded":
-				if (event.winners > 1) {
+				if (event.heroOutcome === "win") {
+					this.playHeroWin(now);
+				} else if (
+					event.heroOutcome === "loss" ||
+					event.heroOutcome === "folded"
+				) {
+					this.playHeroLose(now);
+				} else if (event.winners > 1) {
 					this.playSplitPot(now);
 				} else {
 					this.playPotWin(now);
@@ -99,12 +130,7 @@ export class PokerSoundEngine {
 		const unlock = () => {
 			const ctx = this.ensureContext();
 			if (!ctx) return;
-			void ctx.resume().then(() => {
-				if (ctx.state === "running") {
-					this.unlocked = true;
-					this.dispose();
-				}
-			});
+			this.requestResume(ctx);
 		};
 
 		const addListener = (eventName: keyof DocumentEventMap) => {
@@ -119,6 +145,53 @@ export class PokerSoundEngine {
 		addListener("pointerdown");
 		addListener("keydown");
 		addListener("touchstart");
+	}
+
+	private enqueuePendingEvent(event: PokerSoundEvent) {
+		this.pendingEvents.push(event);
+		if (this.pendingEvents.length > 16) {
+			this.pendingEvents.splice(0, this.pendingEvents.length - 16);
+		}
+	}
+
+	private requestResume(ctx: AudioContext) {
+		if (ctx.state === "running") {
+			this.unlocked = true;
+			this.flushPendingEvents();
+			this.disposeUnlockListeners();
+			return;
+		}
+		if (this.resumePromise) return;
+		this.resumePromise = ctx
+			.resume()
+			.catch(() => {})
+			.then(() => {
+				if (ctx.state !== "running") return;
+				this.unlocked = true;
+				this.flushPendingEvents();
+				this.disposeUnlockListeners();
+			})
+			.finally(() => {
+				this.resumePromise = null;
+			});
+	}
+
+	private flushPendingEvents() {
+		const ctx = this.audioContext;
+		if (!ctx || ctx.state !== "running" || !this.masterGain) return;
+		const queued = this.pendingEvents.splice(0);
+		for (const [index, event] of queued.entries()) {
+			this.playNow(event, ctx.currentTime + index * 0.08);
+		}
+	}
+
+	private disposeUnlockListeners() {
+		if (typeof document !== "undefined") {
+			for (const [eventName, handler] of this.unlockListeners) {
+				document.removeEventListener(eventName, handler, { capture: true });
+			}
+		}
+		this.unlockListeners.length = 0;
 	}
 
 	private ensureContext(): AudioContext | null {
@@ -299,6 +372,18 @@ export class PokerSoundEngine {
 	private playSplitPot(start: number) {
 		this.playChipStack(start, 3, 0.026, 140);
 		this.tone(start + 0.09, 0.16, 740, "triangle", 0.028);
+	}
+
+	private playHeroWin(start: number) {
+		this.playChipStack(start, 6, 0.022, 500);
+		this.tone(start + 0.1, 0.12, 660, "square", 0.03);
+		this.tone(start + 0.2, 0.12, 880, "square", 0.035);
+		this.tone(start + 0.3, 0.3, 1320, "triangle", 0.04);
+	}
+
+	private playHeroLose(start: number) {
+		this.tone(start, 0.2, 320, "sawtooth", 0.03, 200);
+		this.tone(start + 0.2, 0.4, 280, "sawtooth", 0.03, 150);
 	}
 
 	private playTimeout(start: number) {

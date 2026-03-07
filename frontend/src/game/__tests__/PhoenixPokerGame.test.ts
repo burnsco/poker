@@ -263,4 +263,63 @@ describe("PhoenixPokerGame", () => {
 			"street_river",
 		]);
 	});
+
+	test("emits action sound events from new backend action log entries", () => {
+		const game = new PhoenixPokerGame("player-test-1", async () => {});
+		const emitted: string[] = [];
+		game.onSoundEvent = (event) => {
+			if (
+				event.type === "fold" ||
+				event.type === "check" ||
+				event.type === "call" ||
+				event.type === "bet" ||
+				event.type === "raise"
+			) {
+				emitted.push(event.type);
+			}
+		};
+
+		game.sync(buildTable());
+		game.sync(
+			buildTable({
+				last_event: "Seat 2 raises to 80.",
+				hand_state: {
+					...buildTable().hand_state,
+					action_log: [
+						"Hand 2 started.",
+						"Seat 1 checks.",
+						"Seat 2 bets 20.",
+						"Seat 1 calls 20.",
+						"Seat 2 raises to 80.",
+						"Seat 1 folds.",
+					],
+				},
+			}),
+		);
+
+		expect(emitted).toEqual(["check", "bet", "call", "raise", "fold"]);
+	});
+
+	test("falls back to last_event when an action update arrives without log growth", () => {
+		const game = new PhoenixPokerGame("player-test-1", async () => {});
+		const emitted: string[] = [];
+		game.onSoundEvent = (event) => {
+			if (event.type === "check") {
+				emitted.push(event.type);
+			}
+		};
+
+		game.sync(buildTable());
+		game.sync(
+			buildTable({
+				last_event: "Seat 2 checks.",
+				hand_state: {
+					...buildTable().hand_state,
+					last_action: "check",
+				},
+			}),
+		);
+
+		expect(emitted).toEqual(["check"]);
+	});
 });

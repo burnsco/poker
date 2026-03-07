@@ -77,6 +77,10 @@ const BOT_AVATAR_THEMES = [
 
 export class Renderer {
 	private game: PhoenixPokerGame;
+	private collectingPotHandNumber: number | null = null;
+	private collectedPotHandNumber: number | null = null;
+	private potCollectionLayer: HTMLDivElement | null = null;
+	private potCollectionTimer: number | null = null;
 
 	constructor(game: PhoenixPokerGame) {
 		this.game = game;
@@ -214,6 +218,160 @@ export class Renderer {
 		return `<div class="bet-label">${this.formatAmount(amount)}</div><div class="chip-stack">${chips.join("")}</div>`;
 	}
 
+	private renderChipsOnly(amount: number): string {
+		const denominations = [
+			{ value: 500, cls: "chip-purple" },
+			{ value: 100, cls: "chip-black" },
+			{ value: 25, cls: "chip-green" },
+			{ value: 5, cls: "chip-red" },
+			{ value: 1, cls: "chip-white" },
+		] as const;
+
+		const chips: string[] = [];
+		let rem = amount;
+
+		outer: for (const { value, cls } of denominations) {
+			for (let i = 0; i < 4 && rem >= value; i++) {
+				chips.push(`<div class="chip ${cls}"></div>`);
+				rem -= value;
+				if (chips.length >= 5) break outer;
+			}
+		}
+
+		if (chips.length === 0) chips.push('<div class="chip chip-white"></div>');
+
+		return `<div class="chip-stack">${chips.join("")}</div>`;
+	}
+
+	private clearPotCollectionLayer() {
+		if (this.potCollectionTimer != null) {
+			window.clearTimeout(this.potCollectionTimer);
+			this.potCollectionTimer = null;
+		}
+
+		document
+			.querySelectorAll<HTMLElement>(".seat-bet.is-collecting-source")
+			.forEach((el) => {
+				el.classList.remove("is-collecting-source");
+			});
+
+		this.potCollectionLayer?.remove();
+		this.potCollectionLayer = null;
+	}
+
+	private syncPotCollectionState(handNumber: number | null) {
+		if (
+			handNumber == null ||
+			(this.collectingPotHandNumber != null &&
+				this.collectingPotHandNumber !== handNumber)
+		) {
+			this.collectingPotHandNumber = null;
+			this.clearPotCollectionLayer();
+		}
+
+		if (
+			handNumber == null ||
+			(this.collectedPotHandNumber != null &&
+				this.collectedPotHandNumber !== handNumber)
+		) {
+			this.collectedPotHandNumber = null;
+		}
+	}
+
+	private maybeAnimatePotToWinner() {
+		const state = this.game.view;
+		const handNumber = state.handNumber;
+		const winners = state.winners;
+		if (
+			handNumber == null ||
+			winners == null ||
+			winners.length === 0 ||
+			this.collectingPotHandNumber === handNumber ||
+			this.collectedPotHandNumber === handNumber
+		) {
+			return;
+		}
+
+		const winnerSeat = winners[0]?.seat;
+		if (winnerSeat == null) {
+			this.collectedPotHandNumber = handNumber;
+			window.setTimeout(() => this.update(), 0);
+			return;
+		}
+
+		const winnerAvatar = document.getElementById(`p${winnerSeat + 1}-avatar`);
+		if (!(winnerAvatar instanceof HTMLElement)) {
+			return;
+		}
+
+		const sourceBets = Array.from(
+			document.querySelectorAll<HTMLElement>(".seat-bet.visible"),
+		).filter((betEl) => betEl.childElementCount > 0);
+
+		if (sourceBets.length === 0) {
+			this.collectedPotHandNumber = handNumber;
+			window.setTimeout(() => this.update(), 0);
+			return;
+		}
+
+		this.collectingPotHandNumber = handNumber;
+		this.clearPotCollectionLayer();
+
+		const targetRect = winnerAvatar.getBoundingClientRect();
+		const targetX = targetRect.left + targetRect.width / 2;
+		const targetY = targetRect.top + targetRect.height / 2;
+		const layer = document.createElement("div");
+		layer.className = "pot-collection-layer";
+		document.body.appendChild(layer);
+		this.potCollectionLayer = layer;
+
+		const duration = 880;
+		const stagger = 70;
+
+		for (const [index, sourceBet] of sourceBets.entries()) {
+			const sourceRect = sourceBet.getBoundingClientRect();
+			const sourceX = sourceRect.left + sourceRect.width / 2;
+			const sourceY = sourceRect.top + sourceRect.height / 2;
+			const clone = document.createElement("div");
+			clone.className = "pot-collecting-clone";
+			clone.innerHTML = sourceBet.innerHTML;
+			clone.style.left = `${sourceRect.left}px`;
+			clone.style.top = `${sourceRect.top}px`;
+			clone.style.width = `${sourceRect.width}px`;
+			clone.style.height = `${sourceRect.height}px`;
+			layer.appendChild(clone);
+			sourceBet.classList.add("is-collecting-source");
+			clone.animate(
+				[
+					{
+						transform: "translate3d(0, 0, 0) scale(1)",
+						opacity: "1",
+					},
+					{
+						transform: `translate3d(${targetX - sourceX}px, ${targetY - sourceY}px, 0) scale(0.36)`,
+						opacity: "0.1",
+					},
+				],
+				{
+					duration,
+					delay: index * stagger,
+					easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+					fill: "forwards",
+				},
+			);
+		}
+
+		this.potCollectionTimer = window.setTimeout(
+			() => {
+				this.clearPotCollectionLayer();
+				this.collectingPotHandNumber = null;
+				this.collectedPotHandNumber = handNumber;
+				this.update();
+			},
+			duration + sourceBets.length * stagger + 140,
+		);
+	}
+
 	private renderAccessory(
 		type: (typeof BOT_AVATAR_THEMES)[number]["accessory"],
 		accent: string,
@@ -289,6 +447,7 @@ export class Renderer {
 		showAllCards: boolean,
 		winnerSeats: Set<number>,
 		handEndMode: "fold" | "showdown" | null,
+		hideBetStack: boolean,
 	) {
 		const playerId = `p${seatIndex + 1}`;
 		const area = document.getElementById(
@@ -353,8 +512,12 @@ export class Renderer {
 		cardsEl.classList.toggle("is-folded", displayFolded);
 		cardsEl.classList.toggle("is-winner", isWinner);
 
-		avatarEl.dataset.badge =
-			this.game.state.buttonSeat === player.seat ? "D" : "";
+		let badge = "";
+		if (this.game.state.buttonSeat === player.seat) badge = "D";
+		else if (this.game.state.smallBlindSeat === player.seat) badge = "SB";
+		else if (this.game.state.bigBlindSeat === player.seat) badge = "BB";
+
+		avatarEl.dataset.badge = badge;
 		avatarEl.innerHTML = this.renderAvatar(player, seatIndex);
 		nameEl.textContent =
 			this.game.state.buttonSeat === player.seat
@@ -386,9 +549,11 @@ export class Renderer {
 
 		if (player.hand && player.hand.length > 0) {
 			if (isYou || showAllCards) {
-				cardsToRender = player.hand as Array<string | null>;
+				cardsToRender = player.hand.filter(
+					(card) => card !== "__back__",
+				) as Array<string | null>;
 			} else {
-				cardsToRender = player.hand.map(() => "__back__");
+				cardsToRender = [];
 			}
 		}
 
@@ -408,7 +573,7 @@ export class Renderer {
 		}
 
 		const betAmount = player.contributedThisHand || 0;
-		if (betAmount > 0) {
+		if (!hideBetStack && betAmount > 0) {
 			betEl.classList.add("visible");
 			betEl.innerHTML = this.renderChipStack(betAmount);
 		} else {
@@ -419,9 +584,14 @@ export class Renderer {
 
 	update() {
 		const s = this.game.view;
+		this.syncPotCollectionState(s.handNumber);
 		const players = s.players;
 		const showAllCards = s.handEndMode === "showdown";
 		const winnerSeats = new Set((s.winners ?? []).map((winner) => winner.seat));
+		const hideCollectedBets =
+			s.winners !== null &&
+			(this.collectingPotHandNumber === s.handNumber ||
+				this.collectedPotHandNumber === s.handNumber);
 
 		for (let seat = 0; seat < this.game.config.maxPlayers; seat += 1) {
 			this.updatePlayerArea(
@@ -430,6 +600,7 @@ export class Renderer {
 				showAllCards,
 				winnerSeats,
 				s.handEndMode,
+				hideCollectedBets,
 			);
 		}
 
@@ -439,6 +610,9 @@ export class Renderer {
 
 		const potEl = document.getElementById("total-pot");
 		if (potEl) potEl.textContent = `🪙 ${totalPot}`;
+
+		const potChipsEl = document.getElementById("pot-chips");
+		if (potChipsEl) potChipsEl.innerHTML = this.renderChipsOnly(totalPot);
 
 		const blindsEl = document.getElementById("blind-level");
 		if (blindsEl) blindsEl.textContent = `${s.smallBlind} / ${s.bigBlind}`;
@@ -583,6 +757,8 @@ export class Renderer {
 					: "Waiting";
 			actionStateEl.textContent = `${actorName} is acting...`;
 		}
+
+		this.maybeAnimatePotToWinner();
 	}
 
 	showMessage(msg: string) {

@@ -21,11 +21,9 @@ const PROFILE_STORAGE_KEY = "poker.profile";
 type SeatLayout = {
 	seatX: number;
 	seatY: number;
-	betX: number;
-	betY: number;
 };
 
-type SeatCoordinate = Pick<SeatLayout, "seatX" | "seatY">;
+type SeatCoordinate = SeatLayout;
 
 type LobbyTable = {
 	tableId: string;
@@ -62,73 +60,56 @@ const DEFAULT_TABLE: LobbyTable = {
 	stakes: "10 / 20",
 };
 
-function createSeatLayouts(
-	coordinates: SeatCoordinate[],
-	betInsetFactor: number,
-): SeatLayout[] {
+function createSeatLayouts(coordinates: SeatCoordinate[]): SeatLayout[] {
 	return coordinates.map(({ seatX, seatY }) => ({
 		seatX,
 		seatY,
-		betX: Number((50 + (seatX - 50) * betInsetFactor).toFixed(1)),
-		betY: Number((50 + (seatY - 50) * betInsetFactor).toFixed(1)),
 	}));
 }
 
-const DESKTOP_SEAT_LAYOUTS = createSeatLayouts(
-	[
-		{ seatX: 50, seatY: 96 },
-		{ seatX: 18, seatY: 86 },
-		{ seatX: 6, seatY: 50 },
-		{ seatX: 18, seatY: 14 },
-		{ seatX: 50, seatY: 4 },
-		{ seatX: 82, seatY: 14 },
-		{ seatX: 94, seatY: 50 },
-		{ seatX: 82, seatY: 86 },
-	],
-	0.4,
-);
+const DESKTOP_SEAT_LAYOUTS = createSeatLayouts([
+	{ seatX: 50, seatY: 104 },
+	{ seatX: 18, seatY: 104 },
+	{ seatX: 6, seatY: 50 },
+	{ seatX: 18, seatY: 8 },
+	{ seatX: 50, seatY: 8 },
+	{ seatX: 82, seatY: 8 },
+	{ seatX: 94, seatY: 50 },
+	{ seatX: 82, seatY: 104 },
+]);
 
-const TABLET_SEAT_LAYOUTS = createSeatLayouts(
-	[
-		{ seatX: 50, seatY: 96 },
-		{ seatX: 18, seatY: 86 },
-		{ seatX: 6, seatY: 50 },
-		{ seatX: 18, seatY: 14 },
-		{ seatX: 50, seatY: 4 },
-		{ seatX: 82, seatY: 14 },
-		{ seatX: 94, seatY: 50 },
-		{ seatX: 82, seatY: 86 },
-	],
-	0.4,
-);
+const TABLET_SEAT_LAYOUTS = createSeatLayouts([
+	{ seatX: 50, seatY: 104 },
+	{ seatX: 18, seatY: 104 },
+	{ seatX: 6, seatY: 50 },
+	{ seatX: 18, seatY: 8 },
+	{ seatX: 50, seatY: 8 },
+	{ seatX: 82, seatY: 8 },
+	{ seatX: 94, seatY: 50 },
+	{ seatX: 82, seatY: 104 },
+]);
 
-const MOBILE_PORTRAIT_SEAT_LAYOUTS = createSeatLayouts(
-	[
-		{ seatX: 50, seatY: 96 },
-		{ seatX: 18, seatY: 86 },
-		{ seatX: 8, seatY: 50 },
-		{ seatX: 18, seatY: 14 },
-		{ seatX: 50, seatY: 4 },
-		{ seatX: 82, seatY: 14 },
-		{ seatX: 92, seatY: 50 },
-		{ seatX: 82, seatY: 86 },
-	],
-	0.4,
-);
+const MOBILE_PORTRAIT_SEAT_LAYOUTS = createSeatLayouts([
+	{ seatX: 50, seatY: 104 },
+	{ seatX: 18, seatY: 104 },
+	{ seatX: 8, seatY: 50 },
+	{ seatX: 18, seatY: 8 },
+	{ seatX: 50, seatY: 8 },
+	{ seatX: 82, seatY: 8 },
+	{ seatX: 92, seatY: 50 },
+	{ seatX: 82, seatY: 104 },
+]);
 
-const MOBILE_LANDSCAPE_SEAT_LAYOUTS = createSeatLayouts(
-	[
-		{ seatX: 50, seatY: 96 },
-		{ seatX: 18, seatY: 86 },
-		{ seatX: 8, seatY: 50 },
-		{ seatX: 18, seatY: 14 },
-		{ seatX: 50, seatY: 4 },
-		{ seatX: 82, seatY: 14 },
-		{ seatX: 92, seatY: 50 },
-		{ seatX: 82, seatY: 86 },
-	],
-	0.4,
-);
+const MOBILE_LANDSCAPE_SEAT_LAYOUTS = createSeatLayouts([
+	{ seatX: 50, seatY: 104 },
+	{ seatX: 18, seatY: 104 },
+	{ seatX: 8, seatY: 50 },
+	{ seatX: 18, seatY: 8 },
+	{ seatX: 50, seatY: 8 },
+	{ seatX: 82, seatY: 8 },
+	{ seatX: 92, seatY: 50 },
+	{ seatX: 82, seatY: 104 },
+]);
 
 function pickSeatLayout(width: number, height: number): SeatLayout[] {
 	const shortLandscape = width > height && height <= 560;
@@ -652,6 +633,8 @@ function TableScreen({
 	const canAddBot =
 		backendTable?.hand_state.status !== "in_progress" && emptySeatCount > 0;
 	const canClearTable = backendTable?.hand_state.status !== "in_progress";
+	const handResult = backendTable?.hand_state.hand_result ?? null;
+	const handLogSummary = handResult?.heading ?? "Hand in progress";
 	const manualNextHandRequired =
 		backendTable?.players.some(
 			(player) =>
@@ -982,11 +965,6 @@ function TableScreen({
 
 	return (
 		<div id="app" className="app-table">
-			<div className="game-info glass-panel">
-				Pot: <span id="total-pot">🪙 0</span> | Blinds:{" "}
-				<span id="blind-level">10 / 20</span>
-			</div>
-
 			<div className="table-nav">
 				<button
 					type="button"
@@ -997,85 +975,27 @@ function TableScreen({
 				</button>
 			</div>
 
-			<section
-				className={`backend-status glass-panel anim-slide-up${backendOverlayCollapsed ? " is-collapsed" : ""}`}
-			>
-				<div className="backend-status-header">
-					{!backendOverlayCollapsed ? (
-						<p className="backend-eyebrow">Dev stats</p>
-					) : null}
-					<div className="backend-status-title-row">
-						{!backendOverlayCollapsed ? <h2>{backendState}</h2> : null}
-						<button
-							type="button"
-							className="btn tiny backend-toggle"
-							onClick={() =>
-								setBackendOverlayCollapsed((collapsed) => !collapsed)
-							}
-						>
-							{backendOverlayCollapsed ? "Dev Stats" : "Hide Dev Stats"}
-						</button>
-					</div>
-				</div>
-				<div className="backend-grid">
-					<div>
-						<span>Service</span>
-						<strong>{backendHealth?.service || "poker_backend"}</strong>
-					</div>
-					<div>
-						<span>Framework</span>
-						<strong>{backendHealth?.framework || "phoenix"}</strong>
-					</div>
-					<div>
-						<span>Table</span>
-						<strong>{backendTable?.table_id || tableId}</strong>
-					</div>
-					<div>
-						<span>Live clients</span>
-						<strong>{backendTable?.connected_clients ?? 0}</strong>
-					</div>
-					<div>
-						<span>Seats</span>
-						<strong>
-							{occupiedSeats} / {MAX_SEATS}
-						</strong>
-					</div>
-					<div>
-						<span>Bots</span>
-						<strong>{botSeats}</strong>
-					</div>
-					<div>
-						<span>Last event</span>
-						<strong>{backendTable?.last_event || "waiting"}</strong>
-					</div>
-					<div>
-						<span>Stage</span>
-						<strong>{backendTable?.hand_state.stage || "preflop"}</strong>
-					</div>
-					<div>
-						<span>Server pot</span>
-						<strong>🪙 {backendTable?.hand_state.pot ?? 0}</strong>
-					</div>
-					<div>
-						<span>Acting seat</span>
-						<strong>{backendTable?.hand_state.acting_seat ?? "-"}</strong>
-					</div>
-				</div>
-			</section>
-
-			<div id="game-message" className="game-message glass-panel">
-				Joining table {tableId}...
-			</div>
-
 			<div className="table-layout">
 				<div className="table-stage anim-slide-up">
 					<div className="poker-table">
+						<div className="pot-container">
+							<div id="pot-chips" className="pot-chips"></div>
+							<div className="game-info">
+								Pot: <span id="total-pot">🪙 0</span> | Blinds:{" "}
+								<span id="blind-level">10 / 20</span>
+							</div>
+						</div>
+
 						<div className="community-cards" id="community-cards">
 							<div className="card-slot board-slot"></div>
 							<div className="card-slot board-slot"></div>
 							<div className="card-slot board-slot"></div>
 							<div className="card-slot board-slot"></div>
 							<div className="card-slot board-slot"></div>
+						</div>
+
+						<div id="game-message" className="game-message-subtle">
+							Joining table {tableId}...
 						</div>
 					</div>
 
@@ -1085,8 +1005,6 @@ function TableScreen({
 							const style = {
 								"--seat-x": `${layout.seatX}%`,
 								"--seat-y": `${layout.seatY}%`,
-								"--bet-x": `${layout.betX}%`,
-								"--bet-y": `${layout.betY}%`,
 							} as CSSProperties;
 							const playerId = `p${seat + 1}`;
 							const isHeroSeat = heroSeatIndex === seat;
@@ -1094,15 +1012,14 @@ function TableScreen({
 							const isTop = layout.seatY < 35;
 							const isLeft = layout.seatX < 35;
 							const isRight = layout.seatX > 65;
-							const posClass = isBottom
-								? "pos-bottom"
-								: isTop
-									? "pos-top"
-									: isLeft
-										? "pos-left"
-										: isRight
-											? "pos-right"
-											: "";
+							let posClass = "";
+							if (isBottom) posClass += "pos-bottom ";
+							else if (isTop) posClass += "pos-top ";
+
+							if (isLeft) posClass += "pos-left ";
+							else if (isRight) posClass += "pos-right ";
+
+							posClass = posClass.trim();
 
 							const backendSeat = seat + 1;
 							const backendPlayer = backendTable?.players.find(
@@ -1182,7 +1099,10 @@ function TableScreen({
 									</div>
 
 									<div className="seat-bet-anchor" style={style}>
-										<div className="seat-bet" id={`${playerId}-bet`}></div>
+										<div
+											className={`seat-bet ${posClass}`}
+											id={`${playerId}-bet`}
+										></div>
 									</div>
 								</div>
 							);
@@ -1397,34 +1317,103 @@ function TableScreen({
 				</div>
 			</div>
 
-			<aside
-				className={`action-sidebar glass-panel anim-slide-up${handLogCollapsed ? " is-collapsed" : ""}`}
-				style={{ animationDelay: "0.12s" }}
-			>
-				<div className="action-sidebar-header">
-					{!handLogCollapsed ? <h2>Hand Log</h2> : null}
-					<button
-						type="button"
-						className="btn tiny action-sidebar-toggle"
-						onClick={() => setHandLogCollapsed((collapsed) => !collapsed)}
-					>
-						{handLogCollapsed ? "Hand Log" : "Hide Hand Log"}
-					</button>
-				</div>
-
-				<section className="hand-result">
-					<div className="hand-result-title" id="hand-result-title">
-						Hand in progress
+			<div className="bottom-right-dock">
+				<aside
+					className={`action-sidebar glass-panel anim-slide-up${handLogCollapsed ? " is-collapsed" : ""}`}
+					style={{ animationDelay: "0.12s" }}
+				>
+					<div className="action-sidebar-header">
+						{!handLogCollapsed ? (
+							<div className="action-sidebar-copy">
+								<p className="action-sidebar-eyebrow">Hand log</p>
+								<h2
+									className={`action-sidebar-summary${handResult ? ` is-${handResult.hero_outcome}` : ""}`}
+								>
+									{handLogSummary}
+								</h2>
+							</div>
+						) : null}
+						<button
+							type="button"
+							className="btn tiny action-sidebar-toggle"
+							onClick={() => setHandLogCollapsed((collapsed) => !collapsed)}
+							title={handLogSummary}
+						>
+							{handLogCollapsed ? handLogSummary : "Hide Hand Log"}
+						</button>
 					</div>
-					<ul className="hand-result-lines" id="hand-result-lines">
-						<li>Every action will be listed here live.</li>
-					</ul>
-				</section>
 
-				<section className="action-log">
-					<ol id="action-log-list"></ol>
+					<section className="action-log">
+						<ol id="action-log-list"></ol>
+					</section>
+				</aside>
+
+				<section
+					className={`backend-status glass-panel anim-slide-up${backendOverlayCollapsed ? " is-collapsed" : ""}`}
+				>
+					<div className="backend-status-header">
+						{!backendOverlayCollapsed ? (
+							<p className="backend-eyebrow">Dev stats</p>
+						) : null}
+						<div className="backend-status-title-row">
+							{!backendOverlayCollapsed ? <h2>{backendState}</h2> : null}
+							<button
+								type="button"
+								className="btn tiny backend-toggle"
+								onClick={() =>
+									setBackendOverlayCollapsed((collapsed) => !collapsed)
+								}
+							>
+								{backendOverlayCollapsed ? "Dev Stats" : "Hide Dev Stats"}
+							</button>
+						</div>
+					</div>
+					<div className="backend-grid">
+						<div>
+							<span>Service</span>
+							<strong>{backendHealth?.service || "poker_backend"}</strong>
+						</div>
+						<div>
+							<span>Framework</span>
+							<strong>{backendHealth?.framework || "phoenix"}</strong>
+						</div>
+						<div>
+							<span>Table</span>
+							<strong>{backendTable?.table_id || tableId}</strong>
+						</div>
+						<div>
+							<span>Live clients</span>
+							<strong>{backendTable?.connected_clients ?? 0}</strong>
+						</div>
+						<div>
+							<span>Seats</span>
+							<strong>
+								{occupiedSeats} / {MAX_SEATS}
+							</strong>
+						</div>
+						<div>
+							<span>Bots</span>
+							<strong>{botSeats}</strong>
+						</div>
+						<div>
+							<span>Last event</span>
+							<strong>{backendTable?.last_event || "waiting"}</strong>
+						</div>
+						<div>
+							<span>Stage</span>
+							<strong>{backendTable?.hand_state.stage || "preflop"}</strong>
+						</div>
+						<div>
+							<span>Server pot</span>
+							<strong>🪙 {backendTable?.hand_state.pot ?? 0}</strong>
+						</div>
+						<div>
+							<span>Acting seat</span>
+							<strong>{backendTable?.hand_state.acting_seat ?? "-"}</strong>
+						</div>
+					</div>
 				</section>
-			</aside>
+			</div>
 		</div>
 	);
 }
