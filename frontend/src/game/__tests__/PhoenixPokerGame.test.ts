@@ -328,4 +328,38 @@ describe("PhoenixPokerGame", () => {
 
 		expect(emitted).toEqual(["check"]);
 	});
+
+	test("emits a winner-play message when a showdown hand completes", () => {
+		const game = new PhoenixPokerGame("player-test-1", async () => {});
+		const messages: string[] = [];
+		game.onMessage = (message) => messages.push(message);
+
+		game.sync(buildTable());
+		messages.length = 0;
+
+		game.sync(
+			buildTable({
+				game_state: "waiting_for_hand",
+				hand_state: {
+					...buildTable().hand_state,
+					status: "complete",
+					stage: "showdown",
+					acting_seat: null,
+					winner_seats: [1],
+					winner_amounts: { "1": 80 },
+					hand_result: {
+						heading: "Seat 1 wins",
+						lines: [
+							"Showdown. Seat 1 drags the pot of 80.",
+							"Seat 1 shows Ah Ad: Pair of Aces and wins 80.",
+							"Seat 2 shows Kh Qh: High card, King.",
+						],
+						hero_outcome: "win",
+					},
+				},
+			}),
+		);
+
+		expect(messages).toEqual(["Chris wins with Pair of Aces."]);
+	});
 });

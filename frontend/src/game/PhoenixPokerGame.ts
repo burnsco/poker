@@ -174,6 +174,8 @@ export class PhoenixPokerGame {
 					winners,
 					heroOutcome: outcome,
 				});
+				const completionMessage = this.handCompletionMessage();
+				if (completionMessage) this.onMessage(completionMessage);
 			}
 		}
 
@@ -407,6 +409,40 @@ export class PhoenixPokerGame {
 			)?.name;
 			return playerName ?? match;
 		});
+	}
+
+	private handCompletionMessage(): string | null {
+		const result = this.handResultSummary;
+		const table = this.table;
+		if (!result || !table) return null;
+
+		const winnerNames = (table.hand_state.winner_seats ?? [])
+			.map(
+				(seat) =>
+					table.players.find((player) => player.seat === seat)?.name ?? null,
+			)
+			.filter((name): name is string => Boolean(name));
+
+		const winnerShowLine = result.lines.find((line) =>
+			winnerNames.some((name) => line.startsWith(`${name} shows `)),
+		);
+		if (winnerShowLine) {
+			const parsed = winnerShowLine.match(
+				/^(.+?) shows [^:]+:\s*(.+?)(?: and wins \d+)?\.?$/i,
+			);
+			if (parsed) {
+				return `${parsed[1]} wins with ${parsed[2]}.`;
+			}
+			return winnerShowLine;
+		}
+
+		if (result.heading.length > 0) {
+			return /[.!?]$/.test(result.heading)
+				? result.heading
+				: `${result.heading}.`;
+		}
+
+		return null;
 	}
 
 	private handEndMode(table: BackendTable | null): ClientState["handEndMode"] {
