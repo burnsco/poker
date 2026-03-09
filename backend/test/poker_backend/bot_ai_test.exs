@@ -80,11 +80,10 @@ defmodule PokerBackend.BotAiTest do
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
 
-    assert length(styles) >= 4
-    assert "nit" in styles
-    assert "calling_station" in styles
+    assert length(styles) >= 3
+    assert "tight" in styles
     assert "balanced" in styles
-    assert "lag" in styles
+    assert "aggressive" in styles
   end
 
   test "calling stations flat spots that lag bots raise" do

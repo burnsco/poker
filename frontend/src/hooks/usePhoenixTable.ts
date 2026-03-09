@@ -99,7 +99,9 @@ export function usePhoenixTable(tableId = "default"): UsePhoenixTableResult {
 		let messageRef = 1;
 		let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 		let socket: WebSocket | null = null;
-		let connectTimer: ReturnType<typeof setTimeout> | null = null;
+		let reconnectTimer: number | null = null;
+		let reconnectAttempts = 0;
+		const MAX_RECONNECT_DELAY = 30_000;
 
 		const loadBackendState = async () => {
 			try {
@@ -138,7 +140,42 @@ export function usePhoenixTable(tableId = "default"): UsePhoenixTableResult {
 			socket.send(JSON.stringify(message));
 		};
 
-		connectTimer = window.setTimeout(() => {
+		const cleanup = () => {
+			if (heartbeatTimer) {
+				clearInterval(heartbeatTimer);
+				heartbeatTimer = null;
+			}
+			if (socket) {
+				socket.onopen = null;
+				socket.onmessage = null;
+				socket.onerror = null;
+				socket.onclose = null;
+				if (
+					socket.readyState === WebSocket.OPEN ||
+					socket.readyState === WebSocket.CONNECTING
+				) {
+					socket.close();
+				}
+				socket = null;
+			}
+		};
+
+		const scheduleReconnect = () => {
+			if (disposed || reconnectTimer) return;
+			const delay = Math.min(
+				1000 * 2 ** reconnectAttempts,
+				MAX_RECONNECT_DELAY,
+			);
+			reconnectAttempts += 1;
+			setBackendState(`Reconnecting in ${Math.round(delay / 1000)}s...`);
+			reconnectTimer = window.setTimeout(() => {
+				reconnectTimer = null;
+				if (!disposed) connect();
+			}, delay);
+		};
+
+		const connect = () => {
+			cleanup();
 			if (disposed) return;
 
 			const websocketUrl = `${WEBSOCKET_BASE}/websocket?vsn=2.0.0`;
@@ -149,6 +186,7 @@ export function usePhoenixTable(tableId = "default"): UsePhoenixTableResult {
 					socket?.close();
 					return;
 				}
+				reconnectAttempts = 0;
 				send(`table:${tableId}`, "phx_join", {
 					player_id: playerId,
 					player_name: playerName,
@@ -199,19 +237,22 @@ export function usePhoenixTable(tableId = "default"): UsePhoenixTableResult {
 					setBackendState("Phoenix socket disconnected");
 				}
 			});
-		}, 0);
+
+			socket.addEventListener("close", () => {
+				if (!disposed) {
+					scheduleReconnect();
+				}
+			});
+		};
+
+		connect();
 
 		return () => {
 			disposed = true;
-			if (connectTimer) {
-				clearTimeout(connectTimer);
+			if (reconnectTimer) {
+				clearTimeout(reconnectTimer);
 			}
-			if (heartbeatTimer) {
-				clearInterval(heartbeatTimer);
-			}
-			if (socket?.readyState === WebSocket.OPEN) {
-				socket.close();
-			}
+			cleanup();
 		};
 	}, [playerId, playerName, tableId]);
 

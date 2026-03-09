@@ -154,7 +154,7 @@ defmodule PokerBackend.HandEvaluator do
   defp rank_name(4), do: "Four"
   defp rank_name(3), do: "Three"
   defp rank_name(2), do: "Two"
-  defp rank_name(1), do: "Five"
+  defp rank_name(1), do: "Ace"
 
   defp plural_rank_name(14), do: "Aces"
   defp plural_rank_name(13), do: "Kings"

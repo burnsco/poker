@@ -193,19 +193,19 @@ export class Renderer {
 		}
 	}
 
-	private renderChipStack(amount: number): string {
-		const denominations = [
-			{ value: 500, cls: "chip-purple" },
-			{ value: 100, cls: "chip-black" },
-			{ value: 25, cls: "chip-green" },
-			{ value: 5, cls: "chip-red" },
-			{ value: 1, cls: "chip-white" },
-		] as const;
+	private static readonly CHIP_DENOMINATIONS = [
+		{ value: 500, cls: "chip-purple" },
+		{ value: 100, cls: "chip-black" },
+		{ value: 25, cls: "chip-green" },
+		{ value: 5, cls: "chip-red" },
+		{ value: 1, cls: "chip-white" },
+	] as const;
 
+	private buildChips(amount: number): string[] {
 		const chips: string[] = [];
 		let rem = amount;
 
-		outer: for (const { value, cls } of denominations) {
+		outer: for (const { value, cls } of Renderer.CHIP_DENOMINATIONS) {
 			for (let i = 0; i < 4 && rem >= value; i++) {
 				chips.push(`<div class="chip ${cls}"></div>`);
 				rem -= value;
@@ -214,32 +214,16 @@ export class Renderer {
 		}
 
 		if (chips.length === 0) chips.push('<div class="chip chip-white"></div>');
+		return chips;
+	}
 
+	private renderChipStack(amount: number): string {
+		const chips = this.buildChips(amount);
 		return `<div class="bet-label">${this.formatAmount(amount)}</div><div class="chip-stack">${chips.join("")}</div>`;
 	}
 
 	private renderChipsOnly(amount: number): string {
-		const denominations = [
-			{ value: 500, cls: "chip-purple" },
-			{ value: 100, cls: "chip-black" },
-			{ value: 25, cls: "chip-green" },
-			{ value: 5, cls: "chip-red" },
-			{ value: 1, cls: "chip-white" },
-		] as const;
-
-		const chips: string[] = [];
-		let rem = amount;
-
-		outer: for (const { value, cls } of denominations) {
-			for (let i = 0; i < 4 && rem >= value; i++) {
-				chips.push(`<div class="chip ${cls}"></div>`);
-				rem -= value;
-				if (chips.length >= 5) break outer;
-			}
-		}
-
-		if (chips.length === 0) chips.push('<div class="chip chip-white"></div>');
-
+		const chips = this.buildChips(amount);
 		return `<div class="chip-stack">${chips.join("")}</div>`;
 	}
 

@@ -9,7 +9,7 @@ defmodule PokerBackendWeb.Endpoint do
   ]
 
   socket "/socket", PokerBackendWeb.UserSocket,
-    websocket: [check_origin: false],
+    websocket: [check_origin: Application.compile_env(:poker_backend, :ws_check_origin, false)],
     longpoll: false
 
   socket "/live", Phoenix.LiveView.Socket,
