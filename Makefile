@@ -1,12 +1,18 @@
 COMPOSE := docker compose
 
-.PHONY: up down build logs ps frontend-shell backend-shell frontend-install frontend-lint frontend-test frontend-build frontend-check backend-setup backend-compile backend-test backend-check check training-venv training-train training-train-leduc training-train-leduc-50k training-aggregate training-retrain training-train-holdem training-aggregate-holdem training-retrain-holdem
+.PHONY: up down build logs ps deploy deploy-down frontend-shell backend-shell frontend-install frontend-lint frontend-test frontend-build frontend-check backend-setup backend-compile backend-test backend-check check training-venv training-train training-train-leduc training-train-leduc-50k training-aggregate training-retrain training-train-holdem training-aggregate-holdem training-retrain-holdem
 
 up:
 	$(COMPOSE) up --build
 
 down:
 	$(COMPOSE) down
+
+deploy:
+	$(COMPOSE) -f docker-compose.deploy.yml up --build -d
+
+deploy-down:
+	$(COMPOSE) -f docker-compose.deploy.yml down
 
 build:
 	$(COMPOSE) build
