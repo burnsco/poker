@@ -115,6 +115,54 @@ func TestConcludeShowdown_SplitPot_Remainder(t *testing.T) {
 	}
 }
 
+func TestConcludeShowdown_Foldout(t *testing.T) {
+	tbl := &Table{
+		state: models.TableState{
+			Players: []models.Player{
+				{
+					Seat:                1,
+					Name:                "Alice",
+					Status:              "FOLDED",
+					Stack:               1000,
+					ContributedThisHand: 0,
+				},
+				{
+					Seat:                2,
+					Name:                "Bob",
+					Status:              "ACTIVE",
+					Stack:               1000,
+					ContributedThisHand: 200,
+				},
+			},
+			HandState: models.HandState{
+				Pot:            200,
+				CommunityCards: []string{"Ad", "Qc", "Jh", "Th", "2s"},
+				Stage:          "river",
+			},
+		},
+	}
+
+	// Initialize subsystems
+	tbl.bettingEngine = NewBettingEngine(&tbl.state, tbl.log)
+	tbl.showdownResolver = NewShowdownResolver(&tbl.state, tbl.log)
+	tbl.presenceTracker = NewPresenceTracker(&tbl.state, tbl.log)
+
+	tbl.concludeShowdown()
+
+	if len(tbl.state.HandState.WinnerSeats) != 1 {
+		t.Errorf("Expected 1 winner, got %d", len(tbl.state.HandState.WinnerSeats))
+	}
+
+	bobWin := tbl.state.HandState.WinnerAmounts["2"]
+	if bobWin != 200 {
+		t.Errorf("Expected Bob to win 200, got %d", bobWin)
+	}
+
+	if tbl.state.Players[1].Stack != 1200 {
+		t.Errorf("Expected Bob stack to be 1200, got %d", tbl.state.Players[1].Stack)
+	}
+}
+
 func TestLeave_DisconnectsPlayer(t *testing.T) {
 	playerID := "test@example.com"
 	tbl := &Table{
