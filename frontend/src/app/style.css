@@ -1,15 +1,15 @@
 :root {
-	--bg-color-main: #0a0f1d;
-	--bg-color-accent: #161e2e;
-	--glass-bg: #1c2536;
-	--glass-border: #2d3748;
-	--accent-color: #2f95ff;
-	--accent-hover: #52a6ff;
-	--danger-color: #d65858;
-	--text-main: #eff3fa;
-	--text-muted: #9cb0cb;
-	--table-color: #1f6a41;
-	--table-glow: rgba(18, 76, 45, 0.55);
+	--bg-color-main: #060606;
+	--bg-color-accent: #0f1115;
+	--glass-bg: #14161a;
+	--glass-border: #23272e;
+	--accent-color: #d4af37;
+	--accent-hover: #f1c40f;
+	--danger-color: #e74c3c;
+	--text-main: #f0f0f0;
+	--text-muted: #8a8d93;
+	--table-color: #0c4a24;
+	--table-glow: rgba(12, 74, 36, 0.4);
 	--table-width: min(83vw, 1008px);
 	--table-height: min(62vh, 620px);
 	--top-ui-space: 96px;
@@ -38,9 +38,9 @@ body {
 body {
 	font-family: "Outfit", sans-serif;
 	background: radial-gradient(
-		circle at 50% 8%,
+		circle at 50% 0%,
 		var(--bg-color-accent) 0%,
-		var(--bg-color-main) 70%
+		var(--bg-color-main) 100%
 	);
 	color: var(--text-main);
 	overflow: hidden;
@@ -56,11 +56,10 @@ body {
 
 .app-lobby {
 	height: 100dvh;
-	padding: 1rem;
+	padding: 0;
 	overflow: auto;
 	display: grid;
 	align-content: start;
-	gap: 0.9rem;
 }
 
 .app-table {
@@ -77,24 +76,27 @@ body {
 	background:
 		radial-gradient(
 			circle at 16% 12%,
-			rgba(62, 188, 118, 0.18),
+			rgba(212, 175, 55, 0.08),
 			transparent 34%
 		),
-		radial-gradient(circle at 85% 20%, rgba(47, 149, 255, 0.2), transparent 30%);
+		radial-gradient(circle at 85% 20%, rgba(12, 74, 36, 0.15), transparent 30%);
 	z-index: 0;
 }
 
 .top-bar {
-	position: relative;
-	z-index: 1;
-	width: min(1180px, 100%);
-	margin: 0 auto;
-	border-radius: 18px;
-	padding: 0.66rem 0.88rem;
+	position: sticky;
+	top: 0;
+	z-index: 100;
+	width: 100%;
+	background: rgba(6, 6, 6, 0.85);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+	padding: 0.75rem 2rem;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 0.7rem;
+	gap: 1.5rem;
 }
 
 .brand-mark {
@@ -104,15 +106,16 @@ body {
 }
 
 .brand-token {
-	width: 36px;
-	height: 36px;
+	width: 38px;
+	height: 38px;
 	border-radius: 999px;
 	display: grid;
 	place-items: center;
 	font-weight: 800;
-	color: #eafaff;
-	background: linear-gradient(155deg, #157f4b, #0b4e2e);
-	border: 1px solid rgba(153, 235, 195, 0.38);
+	color: #fff;
+	background: linear-gradient(155deg, #d4af37, #a68a2d);
+	border: 2px solid rgba(255, 255, 255, 0.15);
+	box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
 }
 
 .brand-title {
@@ -159,70 +162,18 @@ body {
 .lobby-shell {
 	position: relative;
 	z-index: 1;
-	width: min(1180px, 100%);
+	width: min(1200px, 100%);
 	margin: 0 auto;
-	border-radius: 28px;
-	padding: clamp(1rem, 1.8vw, 1.7rem);
-	display: grid;
-	gap: 1.15rem;
-}
-
-.lobby-hero {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: 1rem;
-}
-
-.lobby-copy {
-	display: grid;
-	gap: 0.55rem;
-}
-
-.lobby-copy h1 {
-	font-size: clamp(1.8rem, 4vw, 3.4rem);
-	line-height: 0.96;
-	max-width: 12ch;
-}
-
-.lobby-subcopy {
-	max-width: 44rem;
-	color: var(--text-muted);
-	font-size: 1rem;
-}
-
-.lobby-highlights {
-	display: grid;
-	grid-template-columns: repeat(3, minmax(130px, 1fr));
-	gap: 0.5rem;
-}
-
-.lobby-highlights div {
 	border-radius: 12px;
-	border: 1px solid rgba(255, 255, 255, 0.12);
-	background: rgba(255, 255, 255, 0.04);
-	padding: 0.52rem 0.62rem;
-}
-
-.lobby-highlights span {
-	display: block;
-	font-size: 0.66rem;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
-	color: var(--text-muted);
-}
-
-.lobby-highlights strong {
-	display: block;
-	margin-top: 0.2rem;
-	font-size: 1.08rem;
+	padding: 2rem;
+	display: grid;
+	gap: 2rem;
 }
 
 .lobby-main-grid {
 	display: grid;
-	grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-	gap: 1rem;
+	grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+	gap: 2rem;
 }
 
 .lobby-column {
@@ -268,7 +219,7 @@ body {
 	font-weight: 700;
 	letter-spacing: 0.16em;
 	text-transform: uppercase;
-	color: #9fd4ff;
+	color: #d4af37;
 }
 
 .create-table-card label,
@@ -278,7 +229,7 @@ body {
 	font-size: 0.72rem;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
-	color: #ccdaee;
+	color: #e0e0e0;
 }
 
 .create-table-card input,
@@ -326,7 +277,7 @@ body {
 	border: 0;
 	padding: 0;
 	background: transparent;
-	color: #9fd4ff;
+	color: #d4af37;
 	font: inherit;
 	font-size: 0.8rem;
 	text-align: left;
@@ -389,69 +340,75 @@ body {
 }
 
 .lobby-card {
-	border-radius: 22px;
-	padding: 0.86rem;
+	border-radius: 8px;
+	padding: 0.75rem 1.2rem;
 	display: grid;
-	grid-template-columns: minmax(0, 1.2fr) minmax(180px, 0.7fr) minmax(
-			130px,
-			auto
-		);
+	grid-template-columns: 2fr 1fr 1fr 1fr auto;
 	align-items: center;
-	gap: 1rem;
+	gap: 1.5rem;
+	background: rgba(20, 22, 26, 0.4);
+	border: 1px solid rgba(255, 255, 255, 0.04);
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lobby-card:hover {
+	background: rgba(30, 34, 40, 0.7);
+	border-color: rgba(212, 175, 55, 0.3);
+	transform: translateX(4px);
+}
+
+.lobby-card-main {
+	display: grid;
+	gap: 0.15rem;
 }
 
 .lobby-card-label {
-	font-size: 0.7rem;
-	letter-spacing: 0.18em;
+	font-size: 0.62rem;
+	letter-spacing: 0.12em;
 	text-transform: uppercase;
-	color: #9fd4ff;
+	color: var(--accent-color);
 }
 
 .lobby-card h3 {
-	font-size: 1.15rem;
-	margin-top: 0.2rem;
+	font-size: 1.05rem;
+	font-weight: 600;
+	color: #fff;
 }
 
 .lobby-card-meta {
-	margin-top: 0.3rem;
+	font-size: 0.8rem;
 	color: var(--text-muted);
 }
 
-.lobby-card-stats {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.65rem;
+.lobby-card-stat {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
 }
 
-.lobby-card-stats div {
-	border-radius: 14px;
-	padding: 0.7rem 0.8rem;
-	background: rgba(255, 255, 255, 0.05);
-	border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.lobby-card-stats span {
-	display: block;
-	font-size: 0.68rem;
-	letter-spacing: 0.08em;
+.lobby-card-stat span {
+	font-size: 0.6rem;
 	text-transform: uppercase;
+	letter-spacing: 0.05em;
 	color: var(--text-muted);
 }
 
-.lobby-card-stats strong {
-	display: block;
-	margin-top: 0.24rem;
-	font-size: 0.86rem;
+.lobby-card-stat strong {
+	font-size: 0.92rem;
+	color: #eee;
+	font-weight: 500;
 }
 
 .lobby-card-actions {
-	display: grid;
-	justify-items: end;
-	gap: 0.3rem;
+	display: flex;
+	justify-content: flex-end;
 }
 
 .lobby-join-btn {
 	min-width: 120px;
+	height: 38px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
 }
 
 .lobby-card-event,
@@ -1649,7 +1606,7 @@ body {
 .bb-preset {
 	background: rgba(47, 149, 255, 0.1);
 	border-color: rgba(47, 149, 255, 0.3);
-	color: #9fd4ff;
+	color: #d4af37;
 }
 
 .bb-preset:not(:disabled):hover {
@@ -1868,8 +1825,8 @@ input[type="range"] {
 	}
 
 	.top-bar {
-		padding: 0.55rem 0.62rem;
-		border-radius: 14px;
+		padding: 0.6rem 1rem;
+		border-radius: 0;
 	}
 
 	.brand-subtitle {

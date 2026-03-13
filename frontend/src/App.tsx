@@ -345,8 +345,6 @@ function LobbyScreen() {
 
 	const openAuthMode = useCallback(
 		(mode: "login" | "register", notice?: LobbyNotice) => {
-			console.log("App: openAuthMode calling", mode);
-			alert("App: Opening Auth Mode: " + mode);
 			setAuthMode(mode);
 			setAuthLocalError(null);
 			clearAuthError();
@@ -358,32 +356,25 @@ function LobbyScreen() {
 	);
 
 	const submitAuth = useCallback(async () => {
-		console.log("App: Inside submitAuth");
-		console.log("App: Register button clicked", { authMode, authEmail, authName });
-		console.log("App: submitAuth triggered", { authMode, authEmail, authName });
 		const trimmedEmail = authEmail.trim();
 		const trimmedName = authName.trim();
 		const trimmedPassword = authPassword.trim();
 
 		if (!isValidEmail(trimmedEmail)) {
-			console.log("App: Invalid email");
 			setAuthLocalError("Enter a valid email address.");
 			return;
 		}
 
 		if (authMode === "register" && trimmedName.length < 3) {
-			console.log("App: Name too short");
 			setAuthLocalError("Display name must be at least 3 characters.");
 			return;
 		}
 
 		if (trimmedPassword.length < 6) {
-			console.log("App: Password too short");
 			setAuthLocalError("Password must be at least 6 characters.");
 			return;
 		}
 
-		console.log("App: Validation passed, calling login/register");
 		setAuthLocalError(null);
 		clearAuthError();
 
@@ -393,7 +384,6 @@ function LobbyScreen() {
 			} else if (authMode === "register") {
 				await register(trimmedEmail, trimmedName, trimmedPassword);
 			}
-			console.log("App: Auth successful");
 
 			setLobbyNotice({
 				tone: "success",
@@ -471,32 +461,6 @@ function LobbyScreen() {
 		setCreateBusy(false);
 	}, [createName, createStakes, openAuthMode, storedTables, user]);
 
-	useEffect(() => {
-		const handler = (e: MouseEvent) => {
-			if (e.target instanceof HTMLElement && e.target.closest("button")) {
-				console.log("App: Global button click detected", {
-					text: e.target.innerText,
-					disabled: (e.target as HTMLButtonElement).disabled,
-					loading,
-					authPending,
-				});
-			}
-		};
-		const submitHandler = (e: SubmitEvent) => {
-			console.log("App: Global form submit detected", {
-				target: e.target,
-				loading,
-				authPending,
-			});
-		};
-		window.addEventListener("click", handler);
-		window.addEventListener("submit", submitHandler);
-		return () => {
-			window.removeEventListener("click", handler);
-			window.removeEventListener("submit", submitHandler);
-		};
-	}, [loading, authPending]);
-
 	const authMessage = authLocalError ?? authError;
 	const authSubmitDisabled =
 		authPending ||
@@ -508,11 +472,6 @@ function LobbyScreen() {
 
 	return (
 		<div id="app" className="app-lobby">
-			{loading && (
-				<div style={{ position: "fixed", top: 0, left: 0, right: 0, background: "rgba(255,0,0,0.8)", color: "white", textAlign: "center", zIndex: 9999, padding: "4px", fontSize: "12px" }}>
-					DEBUG: Auth is Loading...
-				</div>
-			)}
 			<div className="lobby-bg-shape"></div>
 			<header className="top-bar glass-panel anim-slide-up">
 				<div className="brand-mark">
@@ -542,30 +501,20 @@ function LobbyScreen() {
 							</button>
 						</>
 					) : (
-						<div className="auth-header-btns" style={{ display: "flex", gap: "8px" }}>
+						<div className="auth-cta-group">
 							<button
 								type="button"
-								style={{ padding: "4px 12px", cursor: "pointer" }}
+								className="btn"
 								disabled={authPending}
-								onClick={(e) => {
-									console.log("App: Login header clicked");
-									e.preventDefault();
-									e.stopPropagation();
-									openAuthMode("login");
-								}}
+								onClick={() => openAuthMode("login")}
 							>
-								Login
+								Log In
 							</button>
 							<button
 								type="button"
-								style={{ padding: "4px 12px", background: "var(--accent-color)", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+								className="btn primary"
 								disabled={authPending}
-								onClick={(e) => {
-									console.log("App: Register header clicked");
-									e.preventDefault();
-									e.stopPropagation();
-									openAuthMode("register");
-								}}
+								onClick={() => openAuthMode("register")}
 							>
 								Register
 							</button>
@@ -578,32 +527,6 @@ function LobbyScreen() {
 				className="lobby-shell glass-panel anim-slide-up"
 				style={{ animationDelay: "0.08s" }}
 			>
-				<section className="lobby-hero">
-					<div className="lobby-copy">
-						<p className="backend-eyebrow">Live lobby</p>
-						<h1>Find a table, create one, or launch your own bot arena.</h1>
-						<p className="lobby-subcopy">
-							Track active games, jump into open seats, and spin up a private
-							table in one click.
-						</p>
-					</div>
-					<div className="lobby-highlights">
-						<div>
-							<span>Open tables</span>
-							<strong>{games.length}</strong>
-						</div>
-						<div>
-							<span>Players seated</span>
-							<strong>
-								{games.reduce((sum, game) => sum + game.humanPlayers, 0)}
-							</strong>
-						</div>
-						<div>
-							<span>Bots in play</span>
-							<strong>{games.reduce((sum, game) => sum + game.bots, 0)}</strong>
-						</div>
-					</div>
-				</section>
 				{lobbyNotice ? (
 					<div className={`lobby-banner lobby-banner-${lobbyNotice.tone}`}>
 						<span>{lobbyNotice.text}</span>
@@ -661,10 +584,7 @@ function LobbyScreen() {
 							</p>
 						</div>
 
-						<div 
-							className={`auth-card glass-panel${authMode ? " is-open" : ""}`}
-							style={{ pointerEvents: "auto", position: "relative", zIndex: 9999, background: "yellow", border: "5px solid red" }}
-						>
+						<div className={`auth-card glass-panel${authMode ? " is-open" : ""}`}>
 							<p className="card-eyebrow">
 								{user
 									? "Session active"
@@ -694,17 +614,6 @@ function LobbyScreen() {
 								<p className="panel-message panel-message-error">{authMessage}</p>
 							) : null}
 
-							<button 
-								type="button" 
-								style={{ background: "red", color: "white", padding: "10px", margin: "10px 0" }}
-								onClick={() => {
-									console.log("App: TEST BUTTON CLICKED");
-									alert("App: TEST BUTTON WORKS");
-								}}
-							>
-								DEBUG: TEST CLICK
-							</button>
-
 							{user ? (
 								<div className="account-summary">
 									<div>
@@ -720,8 +629,6 @@ function LobbyScreen() {
 								<form
 									onSubmit={(e) => {
 										e.preventDefault();
-										console.log("App: Form onSubmit firing");
-										alert("App: Form onSubmit fired");
 										void submitAuth();
 									}}
 								>
@@ -766,12 +673,7 @@ function LobbyScreen() {
 											type="button"
 											className="btn primary tiny"
 											disabled={authPending || loading}
-											onClick={(e) => {
-												console.log("App: Main Auth Button clicked!");
-												e.preventDefault();
-												e.stopPropagation();
-												void submitAuth();
-											}}
+											onClick={() => void submitAuth()}
 										>
 											{authPending
 												? authMode === "login"
@@ -785,9 +687,7 @@ function LobbyScreen() {
 											type="button"
 											className="btn tiny"
 											disabled={authPending}
-											onClick={(e) => {
-												e.preventDefault();
-												e.stopPropagation();
+											onClick={() => {
 												setAuthMode(null);
 												setAuthLocalError(null);
 												clearAuthError();
@@ -847,32 +747,27 @@ function LobbyScreen() {
 							<ul className="lobby-list" aria-label="Open games">
 								{games.map((game) => (
 									<li key={game.tableId} className="lobby-card glass-panel">
-										<div>
-											<p className="lobby-card-label">Cash Game</p>
+										<div className="lobby-card-main">
+											<p className="lobby-card-label">Texas Hold'em</p>
 											<h3>{game.name}</h3>
-											<p className="lobby-card-meta">
-												Blinds {game.stakes} | {game.humanPlayers} players |{" "}
-												{game.bots} active bots
-											</p>
+											<p className="lobby-card-meta">Blinds {game.stakes}</p>
 										</div>
 
-										<div className="lobby-card-stats">
-											<div>
-												<span>Table</span>
-												<strong>{game.tableId}</strong>
-											</div>
-											<div>
-												<span>Status</span>
-												<strong>{game.status}</strong>
-											</div>
-											<div>
-												<span>Open Seats</span>
-												<strong>{game.openSeats}</strong>
-											</div>
-											<div>
-												<span>Watchers</span>
-												<strong>{game.connectedClients}</strong>
-											</div>
+										<div className="lobby-card-stat">
+											<span>Players</span>
+											<strong>
+												{game.humanPlayers + game.bots} / {MAX_SEATS}
+											</strong>
+										</div>
+
+										<div className="lobby-card-stat">
+											<span>Status</span>
+											<strong>{game.status}</strong>
+										</div>
+
+										<div className="lobby-card-stat">
+											<span>Watchers</span>
+											<strong>{game.connectedClients}</strong>
 										</div>
 
 										<div className="lobby-card-actions">
@@ -881,9 +776,8 @@ function LobbyScreen() {
 												className="btn primary lobby-join-btn"
 												onClick={() => navigateToTable(game.tableId)}
 											>
-												Open Table
+												Join Table
 											</button>
-											<p className="lobby-card-event">Last: {game.lastEvent}</p>
 										</div>
 									</li>
 								))}
@@ -891,28 +785,6 @@ function LobbyScreen() {
 							{isLoading ? (
 								<p className="lobby-inline-note">Loading tables...</p>
 							) : null}
-						</div>
-
-						<div className="extras-grid">
-							<div className="extra-card glass-panel">
-								<h3>Featured Format</h3>
-								<p>
-									6-max turbo cash with deep stacks and faster blind pressure.
-								</p>
-							</div>
-							<div className="extra-card glass-panel">
-								<h3>Daily Challenge</h3>
-								<p>
-									Win one showdown with pocket pairs and log three clean folds.
-								</p>
-							</div>
-							<div className="extra-card glass-panel">
-								<h3>Table Notes</h3>
-								<p>
-									Custom tables can be started empty and filled with bots from
-									inside the table view.
-								</p>
-							</div>
 						</div>
 					</div>
 				</section>
