@@ -6,6 +6,17 @@ defmodule PokerBackendWeb.TableController do
 
   plug PokerBackendWeb.Plugs.TableActionRateLimit when action in [:update_action]
 
+  def index(conn, _params) do
+    tables =
+      PokerBackend.Table.list_active_tables()
+      |> Enum.map(fn table_id ->
+        state = PokerBackend.Table.state(table_id)
+        %{table_id: table_id, name: state.table_name, stakes: state.stakes}
+      end)
+
+    json(conn, %{data: tables})
+  end
+
   def show(conn, %{"table_id" => table_id}) do
     if valid_table_id?(table_id) do
       {:ok, _pid} = PokerBackend.Table.ensure_started(table_id)

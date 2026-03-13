@@ -231,6 +231,25 @@ async function postTableAction(
 	);
 }
 
+async function fetchActiveTables(): Promise<LobbyTable[]> {
+	try {
+		const data = await requestJson<{ data: { table_id: string; name: string; stakes: string }[] }>(
+			`${BACKEND_URL}/api/tables`,
+			{
+				credentials: "include",
+			},
+			"Failed to load active tables",
+		);
+		return data.data.map(t => ({
+			tableId: t.table_id,
+			name: t.name,
+			stakes: t.stakes
+		}));
+	} catch {
+		return [];
+	}
+}
+
 function LobbyScreen() {
 	const {
 		user,
@@ -257,18 +276,21 @@ function LobbyScreen() {
 	const [createBusy, setCreateBusy] = useState(false);
 	const [lobbyNotice, setLobbyNotice] = useState<LobbyNotice | null>(null);
 
-	const lobbyTables = useMemo(() => {
+	const refreshGames = useCallback(async () => {
+		const activeTables = await fetchActiveTables();
+		
 		const map = new Map<string, LobbyTable>();
 		map.set(DEFAULT_TABLE.tableId, DEFAULT_TABLE);
+		for (const table of activeTables) {
+			map.set(table.tableId, table);
+		}
 		for (const table of storedTables) {
 			map.set(table.tableId, table);
 		}
-		return Array.from(map.values());
-	}, [storedTables]);
+		const allTables = Array.from(map.values());
 
-	const refreshGames = useCallback(async () => {
 		const loaded = await Promise.all(
-			lobbyTables.map(async (table): Promise<LobbyGame> => {
+			allTables.map(async (table): Promise<LobbyGame> => {
 				const state = await fetchTableState(table.tableId);
 				const activeBots =
 					state?.players.filter((player) => player.is_bot && player.stack > 0)

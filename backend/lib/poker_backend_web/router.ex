@@ -35,6 +35,7 @@ defmodule PokerBackendWeb.Router do
     pipe_through :api
 
     get "/health", HealthController, :show
+    get "/tables", TableController, :index
     get "/tables/:table_id", TableController, :show
     options "/*path", HealthController, :show
   end

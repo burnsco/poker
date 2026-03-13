@@ -107,6 +107,10 @@ defmodule PokerBackend.Table do
   def action(table_id, action, payload \\ %{}),
     do: GenServer.call(via(table_id), {:action, action, payload})
 
+  def list_active_tables do
+    Registry.select(PokerBackend.TableRegistry, [{{:"$1", :"$2", :"$3"}, [], [:"$1"]}])
+  end
+
   def topic(table_id), do: "table:" <> table_id
 
   defp via(table_id), do: {:via, Registry, {PokerBackend.TableRegistry, table_id}}
