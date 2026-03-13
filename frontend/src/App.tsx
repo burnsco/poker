@@ -521,24 +521,34 @@ function LobbyScreen() {
 							</button>
 						</>
 					) : (
-						<>
+						<div className="auth-header-btns" style={{ display: "flex", gap: "8px" }}>
 							<button
 								type="button"
-								className="btn tiny"
+								style={{ padding: "4px 12px", cursor: "pointer" }}
 								disabled={authPending}
-								onClick={() => openAuthMode("login")}
+								onClick={(e) => {
+									console.log("App: Login header clicked");
+									e.preventDefault();
+									e.stopPropagation();
+									openAuthMode("login");
+								}}
 							>
 								Login
 							</button>
 							<button
 								type="button"
-								className="btn primary tiny"
+								style={{ padding: "4px 12px", background: "var(--accent-color)", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
 								disabled={authPending}
-								onClick={() => openAuthMode("register")}
+								onClick={(e) => {
+									console.log("App: Register header clicked");
+									e.preventDefault();
+									e.stopPropagation();
+									openAuthMode("register");
+								}}
 							>
 								Register
 							</button>
-						</>
+						</div>
 					)}
 				</div>
 			</header>
@@ -718,9 +728,15 @@ function LobbyScreen() {
 									</label>
 									<div className="auth-actions">
 										<button
-											type="submit"
+											type="button"
 											className="btn primary tiny"
 											disabled={authPending || loading}
+											onClick={(e) => {
+												console.log("App: Main Auth Button clicked!");
+												e.preventDefault();
+												e.stopPropagation();
+												void submitAuth();
+											}}
 										>
 											{authPending
 												? authMode === "login"
@@ -734,7 +750,9 @@ function LobbyScreen() {
 											type="button"
 											className="btn tiny"
 											disabled={authPending}
-											onClick={() => {
+											onClick={(e) => {
+												e.preventDefault();
+												e.stopPropagation();
 												setAuthMode(null);
 												setAuthLocalError(null);
 												clearAuthError();
