@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "./contexts/AuthContext";
 import { PokerGameClient } from "./game/PokerGameClient";
 import { usePokerTable } from "./hooks/usePokerTable";
@@ -207,7 +207,7 @@ function isValidEmail(email: string) {
 async function fetchTableState(tableId: string): Promise<BackendTable | null> {
   try {
     return await requestJson<BackendTable>(
-      `${BACKEND_URL}/api/tables/${tableId}`,
+      `${getBackendUrl()}/api/tables/${tableId}`,
       {
         credentials: "include",
       },
@@ -223,7 +223,7 @@ async function postTableAction(
   action: string,
   payload: Record<string, unknown> = {},
 ) {
-  const baseUrl = BACKEND_URL || (typeof window !== "undefined" ? window.location.origin : "");
+  const baseUrl = getBackendUrl();
   const actionUrl = new URL(`${baseUrl}/api/tables/${tableId}/actions`);
   actionUrl.searchParams.set("action", action);
 
@@ -249,7 +249,7 @@ function parseTableId(tableId: string): LobbyTable {
   const parts = tableId.split("-");
   if (parts.length < 2) return { tableId, name: tableId, stakes: "10 / 20" };
 
-  const suffix = parts.pop();
+  parts.pop();
   const name = parts.join(" ").replace(/\b\w/g, (c) => c.toUpperCase());
   return { tableId, name, stakes: "10 / 20" };
 }
@@ -269,12 +269,12 @@ async function fetchActiveTables(): Promise<LobbyTable[]> {
   }
 }
 
+import { useQuery } from "@tanstack/react-query";
+
 function LobbyScreen() {
   const { user, authError, authPending, clearAuthError, loading, login, register, logout } =
     useAuth();
   const [storedTables, setStoredTables] = useState<LobbyTable[]>(() => loadStoredTables());
-  const [games, setGames] = useState<LobbyGame[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [authMode, setAuthMode] = useState<"login" | "register" | null>(null);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -287,72 +287,55 @@ function LobbyScreen() {
   const [createBusy, setCreateBusy] = useState(false);
   const [lobbyNotice, setLobbyNotice] = useState<LobbyNotice | null>(null);
 
-  const refreshGames = useCallback(async () => {
-    const activeTables = await fetchActiveTables();
+  const {
+    data: games = [],
+    isLoading,
+    refetch: refreshGames,
+  } = useQuery({
+    queryKey: ["lobby-games", storedTables],
+    queryFn: async () => {
+      const activeTables = await fetchActiveTables();
 
-    const map = new Map<string, LobbyTable>();
-    map.set(DEFAULT_TABLE.tableId, DEFAULT_TABLE);
-    for (const table of activeTables) {
-      map.set(table.tableId, table);
-    }
-    for (const table of storedTables) {
-      map.set(table.tableId, table);
-    }
-    const allTables = Array.from(map.values());
+      const map = new Map<string, LobbyTable>();
+      map.set(DEFAULT_TABLE.tableId, DEFAULT_TABLE);
+      for (const table of activeTables) {
+        map.set(table.tableId, table);
+      }
+      for (const table of storedTables) {
+        map.set(table.tableId, table);
+      }
+      const allTables = Array.from(map.values());
 
-    const loaded = await Promise.all(
-      allTables.map(async (table): Promise<LobbyGame> => {
-        const state = await fetchTableState(table.tableId);
-        const activeBots =
-          state?.players?.filter((player) => player.is_bot && player.stack > 0).length ?? 0;
-        const openSeats = state?.players?.filter((player) => player.is_bot).length ?? MAX_SEATS;
-        const humanPlayers = state?.players?.filter((player) => !player.is_bot).length ?? 0;
-        const status =
-          state == null
-            ? "Offline"
-            : state.game_state === "hand_in_progress"
-              ? "In hand"
-              : "Waiting";
+      return await Promise.all(
+        allTables.map(async (table): Promise<LobbyGame> => {
+          const state = await fetchTableState(table.tableId);
+          const activeBots =
+            state?.players?.filter((player) => player.is_bot && player.stack > 0).length ?? 0;
+          const openSeats = state?.players?.filter((player) => player.is_bot).length ?? MAX_SEATS;
+          const humanPlayers = state?.players?.filter((player) => !player.is_bot).length ?? 0;
+          const status =
+            state == null
+              ? "Offline"
+              : state.game_state === "hand_in_progress"
+                ? "In hand"
+                : "Waiting";
 
-        return {
-          tableId: table.tableId,
-          name: table.name,
-          stakes: table.stakes,
-          bots: activeBots,
-          openSeats,
-          humanPlayers,
-          status,
-          lastEvent: state?.last_event ?? "unreachable",
-          connectedClients: state?.connected_clients ?? 0,
-        };
-      }),
-    );
-
-    setGames(loaded);
-    setIsLoading(false);
-  }, [storedTables]);
-
-  const lobbyTables = useMemo(() => {
-    const map = new Map<string, LobbyTable>();
-    map.set(DEFAULT_TABLE.tableId, DEFAULT_TABLE);
-    map.set(TEST_TABLE.tableId, TEST_TABLE);
-    for (const table of storedTables) {
-      map.set(table.tableId, table);
-    }
-    return Array.from(map.values());
-  }, [storedTables]);
-
-  useEffect(() => {
-    void refreshGames();
-
-    const timer = window.setInterval(() => {
-      void refreshGames();
-    }, 8_000);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [refreshGames]);
+          return {
+            tableId: table.tableId,
+            name: table.name,
+            stakes: table.stakes,
+            bots: activeBots,
+            openSeats,
+            humanPlayers,
+            status,
+            lastEvent: state?.last_event ?? "unreachable",
+            connectedClients: state?.connected_clients ?? 0,
+          };
+        }),
+      );
+    },
+    refetchInterval: 8000,
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -488,7 +471,7 @@ function LobbyScreen() {
         // });
       }
     };
-    const submitHandler = (e: SubmitEvent) => {
+    const submitHandler = (_e: SubmitEvent) => {
       // console.log("App: Global form submit detected", {
       // 	target: e.target,
       // 	loading,
@@ -513,7 +496,7 @@ function LobbyScreen() {
     (authMode === "register" && authName.trim().length < 3);
 
   return (
-    <div id="app" className="app-lobby">
+    <div id="app" className="app-lobby dark">
       {loading && (
         <div
           style={{
@@ -732,29 +715,33 @@ function LobbyScreen() {
               <p>
                 Spin up a clean room, then add bots or take the first seat from inside the table.
               </p>
-              <label>
-                Table Name
-                <input
-                  type="text"
-                  value={createName}
-                  disabled={!user || createBusy || loading}
-                  placeholder="Friday Night Hold'em"
-                  onChange={(event) => setCreateName(event.target.value)}
-                />
-              </label>
-              <label>
-                Stakes
-                <input
-                  type="text"
-                  value={createStakes}
-                  disabled={!user || createBusy || loading}
-                  placeholder="10 / 20"
-                  onChange={(event) => setCreateStakes(event.target.value)}
-                />
-              </label>
+              <div className="space-y-4 my-2">
+                <label>
+                  Table Name
+                  <input
+                    type="text"
+                    className="w-full"
+                    value={createName}
+                    disabled={!user || createBusy || loading}
+                    placeholder="Friday Night Hold'em"
+                    onChange={(event) => setCreateName(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Stakes
+                  <input
+                    type="text"
+                    className="w-full"
+                    value={createStakes}
+                    disabled={!user || createBusy || loading}
+                    placeholder="10 / 20"
+                    onChange={(event) => setCreateStakes(event.target.value)}
+                  />
+                </label>
+              </div>
               <button
                 type="button"
-                className="btn primary"
+                className="btn primary w-full"
                 disabled={createBusy || loading}
                 onClick={() => void createTable()}
               >
@@ -772,37 +759,60 @@ function LobbyScreen() {
             <div className="games-card glass-panel">
               <div className="games-card-header">
                 <h2>Live Games</h2>
-                <button type="button" className="btn tiny" onClick={() => void refreshGames()}>
-                  Refresh
-                </button>
+                <div className="flex gap-2">
+                  <button type="button" className="btn tiny" onClick={() => void refreshGames()}>
+                    Refresh
+                  </button>
+                </div>
               </div>
               <ul className="lobby-list" aria-label="Open games">
                 {games.map((game) => (
-                  <li key={game.tableId} className="lobby-card glass-panel">
+                  <li
+                    key={game.tableId}
+                    className="lobby-card glass-panel border-l-4 border-l-primary/50"
+                  >
                     <div>
-                      <p className="lobby-card-label">Cash Game</p>
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`status-badge ${
+                            game.status === "In hand"
+                              ? "status-badge-in-hand"
+                              : game.status === "Waiting"
+                                ? "status-badge-waiting"
+                                : "status-badge-offline"
+                          }`}
+                        >
+                          {game.status}
+                        </span>
+                        <p className="lobby-card-label">Texas Hold'em</p>
+                      </div>
                       <h3>{game.name}</h3>
                       <p className="lobby-card-meta">
-                        Blinds {game.stakes} | {game.humanPlayers} players | {game.bots} active bots
+                        Blinds <strong>{game.stakes}</strong>
                       </p>
+                      <div
+                        className="seat-map"
+                        title={`${game.humanPlayers} players, ${game.bots} bots`}
+                      >
+                        {Array.from({ length: MAX_SEATS }).map((_, i) => {
+                          let seatClass = "seat-dot";
+                          if (i < game.humanPlayers) seatClass += " is-human";
+                          else if (i < game.humanPlayers + game.bots) seatClass += " is-bot";
+                          return <div key={i} className={seatClass} />;
+                        })}
+                      </div>
                     </div>
 
                     <div className="lobby-card-stats">
                       <div>
-                        <span>Table</span>
-                        <strong>{game.tableId}</strong>
+                        <span>Players</span>
+                        <strong>
+                          {game.humanPlayers} / {MAX_SEATS}
+                        </strong>
                       </div>
                       <div>
-                        <span>Status</span>
-                        <strong>{game.status}</strong>
-                      </div>
-                      <div>
-                        <span>Open Seats</span>
-                        <strong>{game.openSeats}</strong>
-                      </div>
-                      <div>
-                        <span>Watchers</span>
-                        <strong>{game.connectedClients}</strong>
+                        <span>Bots</span>
+                        <strong>{game.bots}</strong>
                       </div>
                     </div>
 
@@ -812,14 +822,21 @@ function LobbyScreen() {
                         className="btn primary lobby-join-btn"
                         onClick={() => navigateToTable(game.tableId)}
                       >
-                        Open Table
+                        Join Table
                       </button>
-                      <p className="lobby-card-event">Last: {game.lastEvent}</p>
+                      <p className="lobby-card-event">Watchers: {game.connectedClients}</p>
                     </div>
                   </li>
                 ))}
               </ul>
-              {isLoading ? <p className="lobby-inline-note">Loading tables...</p> : null}
+              {isLoading ? (
+                <p className="lobby-inline-note">Searching for active tables...</p>
+              ) : null}
+              {!isLoading && games.length === 0 && (
+                <p className="lobby-inline-note">
+                  No active tables found. Create one to get started!
+                </p>
+              )}
             </div>
 
             <div className="extras-grid">
@@ -846,6 +863,17 @@ function LobbyScreen() {
   );
 }
 
+const logControlDebug = (message: string) => {
+  const timestamp = new Date().toLocaleTimeString("en-US", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const entry = `${timestamp} ${message}`;
+  console.debug("[betting-ui]", entry);
+};
+
 function TableScreen({ tableId, isCustomTable }: { tableId: string; isCustomTable: boolean }) {
   const { loading, user } = useAuth();
   const gameRef = useRef<PokerGameClient | null>(null);
@@ -856,28 +884,31 @@ function TableScreen({ tableId, isCustomTable }: { tableId: string; isCustomTabl
   const [tableNotice, setTableNotice] = useState<string | null>(null);
   const { playerId, backendHealth, backendTable, backendState, sendAction, loadBackendState } =
     usePokerTable(tableId);
-  const occupiedSeats = backendTable?.players.length ?? 0;
+  const occupiedSeats = backendTable?.players?.length ?? 0;
   const botSeats =
-    backendTable?.players.filter((player) => player.is_bot && player.stack > 0).length ?? 0;
+    (backendTable?.players ?? []).filter((player) => player.is_bot && player.stack > 0).length ?? 0;
   const emptySeatCount =
-    backendTable?.players.filter((player) => player.is_bot && player.stack <= 0).length ?? 0;
+    (backendTable?.players ?? []).filter((player) => player.is_bot && player.stack <= 0).length ??
+    0;
   const ownedPlayer =
-    backendTable?.players.find((player) => String(player.player_id) === String(playerId)) ?? null;
-  const pendingPlayer =
-    backendTable?.pending_players.find((player) => String(player.player_id) === String(playerId)) ??
+    (backendTable?.players ?? []).find((player) => String(player.player_id) === String(playerId)) ??
     null;
+  const pendingPlayer =
+    (backendTable?.pending_players ?? []).find(
+      (player) => String(player.player_id) === String(playerId),
+    ) ?? null;
   const heroSeatIndex = ownedPlayer ? ownedPlayer.seat - 1 : null;
   const reservedSeats = new Set(
-    backendTable?.pending_players.map((player) => player.desired_seat) ?? [],
+    (backendTable?.pending_players ?? []).map((player) => player.desired_seat),
   );
   const reservedSeatLabels = new Map(
-    backendTable?.pending_players.map((player) => [
+    (backendTable?.pending_players ?? []).map((player) => [
       player.desired_seat,
       String(player.player_id) === String(playerId) ? "Reserved for you" : "Reserved",
-    ]) ?? [],
+    ]),
   );
   const readySeats =
-    backendTable?.players.filter((player) => player.stack > 0 && player.will_play_next_hand)
+    (backendTable?.players ?? []).filter((player) => player.stack > 0 && player.will_play_next_hand)
       .length ?? 0;
   const canRevealCompletedHand =
     backendTable?.hand_state.status === "complete" &&
@@ -887,16 +918,9 @@ function TableScreen({ tableId, isCustomTable }: { tableId: string; isCustomTabl
   const canClearTable = backendTable?.hand_state.status !== "in_progress";
   const handResult = backendTable?.hand_state.hand_result ?? null;
   const handLogSummary = handResult?.heading ?? "Hand in progress";
-  const logControlDebug = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString("en-US", {
-      hour12: false,
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-    const entry = `${timestamp} ${message}`;
-    console.debug("[betting-ui]", entry);
-  };
+  const showGameMessage = useCallback((message: string) => {
+    rendererRef.current?.showMessage(message);
+  }, []);
   const sendActionWithDebug = useCallback(
     async (action: string, payload?: TableActionPayload, source = "ui") => {
       const payloadLabel = payload == null ? "none" : JSON.stringify(payload);
@@ -917,11 +941,8 @@ function TableScreen({ tableId, isCustomTable }: { tableId: string; isCustomTabl
         throw error;
       }
     },
-    [sendAction, loadBackendState],
+    [sendAction, loadBackendState, showGameMessage],
   );
-  const showGameMessage = useCallback((message: string) => {
-    rendererRef.current?.showMessage(message);
-  }, []);
   const syncSliderDisplay = useCallback(() => {
     const slider = document.getElementById("bet-slider") as HTMLInputElement | null;
     const display = document.getElementById("bet-amount-display");
@@ -1126,7 +1147,7 @@ function TableScreen({ tableId, isCustomTable }: { tableId: string; isCustomTabl
   }, [backendTable, playerId]);
 
   return (
-    <div id="app" className="app-table">
+    <div id="app" className="app-table dark">
       <div className="table-nav">
         <button type="button" className="btn tiny table-nav-btn" onClick={navigateToLobby}>
           Back to Lobby
@@ -1159,22 +1180,30 @@ function TableScreen({ tableId, isCustomTable }: { tableId: string; isCustomTabl
             <div className="pot-container">
               <div id="pot-chips" className="pot-chips"></div>
               <div className="game-info">
-                Pot: <span id="total-pot">🪙 0</span> | Blinds:{" "}
-                <span id="blind-level">10 / 20</span>
+                Pot: <span id="total-pot">🪙 {backendTable?.hand_state.pot ?? 0}</span> | Blinds:{" "}
+                <span id="blind-level">
+                  {backendTable?.hand_state.small_blind ?? 10} /{" "}
+                  {backendTable?.hand_state.big_blind ?? 20}
+                </span>
               </div>
             </div>
 
             <div className="community-cards" id="community-cards">
-              <div className="card-slot board-slot"></div>
-              <div className="card-slot board-slot"></div>
-              <div className="card-slot board-slot"></div>
-              <div className="card-slot board-slot"></div>
-              <div className="card-slot board-slot"></div>
+              {backendTable?.hand_state.community_cards.map((card, i) => (
+                <div key={i} className="board-card-wrapper">
+                  {card}
+                </div>
+              )) ||
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="card-slot board-slot"></div>
+                ))}
             </div>
 
-            <div id="game-message" className="game-message-subtle">
-              Joining table {tableId}...
-            </div>
+            {!backendTable ? (
+              <div className="game-message-subtle" id="game-message">
+                Joining table {tableId}...
+              </div>
+            ) : null}
           </div>
 
           <div className="table-seats">
@@ -1248,13 +1277,17 @@ function TableScreen({ tableId, isCustomTable }: { tableId: string; isCustomTabl
 
                       <div className="player-info glass-panel">
                         <div className="player-name" id={`${playerId}-name`}>
-                          Seat {seat + 1}
+                          {backendPlayer ? backendPlayer.name : `Seat ${seat + 1}`}
                         </div>
                         <div className="player-chips" id={`${playerId}-chips`}>
-                          Waiting...
+                          {backendPlayer ? formatBalance(backendPlayer.stack) : "Waiting..."}
                         </div>
                       </div>
-                      <div className="player-status" id={`${playerId}-status`}></div>
+                      <div className="player-status" id={`${playerId}-status`}>
+                        {backendTable?.hand_state.winner_seats?.includes(seat + 1) ? (
+                          <span className="badge winner-badge">Winner</span>
+                        ) : null}
+                      </div>
                       {canClaimSeat ? (
                         <button
                           type="button"
@@ -1464,7 +1497,7 @@ function TableScreen({ tableId, isCustomTable }: { tableId: string; isCustomTabl
             type="button"
             className="btn action-fold danger"
             id="btn-fold"
-            disabled={!user}
+            disabled={!backendTable || backendTable.hand_state.acting_seat !== ownedPlayer?.seat}
             onClick={handleFoldClick}
           >
             Fold
@@ -1473,21 +1506,21 @@ function TableScreen({ tableId, isCustomTable }: { tableId: string; isCustomTabl
             type="button"
             className="btn action-call"
             id="btn-call"
-            data-action="check"
-            disabled={!user}
+            data-action={backendTable && backendTable.hand_state.current_bet > 0 ? "call" : "check"}
+            disabled={!backendTable || backendTable.hand_state.acting_seat !== ownedPlayer?.seat}
             onClick={handleCallClick}
           >
-            Check
+            {backendTable && backendTable.hand_state.current_bet > 0 ? "Call" : "Check"}
           </button>
           <button
             type="button"
             className="btn action-raise primary"
             id="btn-raise"
-            data-action="bet"
-            disabled={!user}
+            data-action={backendTable && backendTable.hand_state.current_bet > 0 ? "raise" : "bet"}
+            disabled={!backendTable || backendTable.hand_state.acting_seat !== ownedPlayer?.seat}
             onClick={handleRaiseClick}
           >
-            Bet
+            {backendTable && backendTable.hand_state.current_bet > 0 ? "Raise" : "Bet"}
           </button>
         </div>
       </div>
@@ -1502,7 +1535,10 @@ function TableScreen({ tableId, isCustomTable }: { tableId: string; isCustomTabl
               <div className="action-sidebar-copy">
                 <p className="action-sidebar-eyebrow">Hand log</p>
                 <h2 id="hand-result-title" className="action-sidebar-summary hand-result-title">
-                  Hand in progress
+                  {backendTable?.hand_state.hand_result?.heading ||
+                    (backendTable?.hand_state.status === "complete"
+                      ? "Hand over"
+                      : "Hand in progress")}
                 </h2>
               </div>
             ) : null}
@@ -1521,7 +1557,11 @@ function TableScreen({ tableId, isCustomTable }: { tableId: string; isCustomTabl
           </section>
 
           <section className="action-log">
-            <ol id="action-log-list"></ol>
+            <ol id="action-log-list">
+              {backendTable?.hand_state.action_log.map((entry, i) => (
+                <li key={i}>{entry}</li>
+              ))}
+            </ol>
           </section>
         </aside>
 
@@ -1592,9 +1632,12 @@ function TableScreen({ tableId, isCustomTable }: { tableId: string; isCustomTabl
 }
 
 export default function App() {
-  const [selectedTableId, setSelectedTableId] = useState<string | null>(() =>
-    typeof window === "undefined" ? null : getTableIdFromHash(window.location.hash),
-  );
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(() => {
+    const tableId = typeof window === "undefined" ? null : getTableIdFromHash(window.location.hash);
+    if (process.env.NODE_ENV === "test")
+      console.log(`[TEST APP] selected=${tableId} hash=${window.location.hash}`);
+    return tableId;
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;

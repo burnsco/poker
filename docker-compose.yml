@@ -41,6 +41,8 @@ services:
       PORT: 4000
       DATABASE_URL: postgresql://postgres:postgres@db:5432/poker_dev
       DB_HOSTNAME: db
+      JWT_SECRET: super-secret-jwt-key-for-dev
+      ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001
     volumes:
       - .:/app
     healthcheck:

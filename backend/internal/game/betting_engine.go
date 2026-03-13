@@ -56,22 +56,22 @@ func (be *BettingEngine) ProcessAction(action string, playerID string, payload m
 		if toCall <= 0 {
 			return false, fmt.Errorf("invalid_call")
 		}
-		be.handleCall(playerIdx, toCall)
+		showdown = be.handleCall(playerIdx, toCall)
 	case "bet":
 		if err := be.validateBet(player, amount); err != nil {
 			return false, err
 		}
-		be.handleBet(playerIdx, amount)
+		showdown = be.handleBet(playerIdx, amount)
 	case "raise":
 		if err := be.validateRaise(player, amount); err != nil {
 			return false, err
 		}
-		be.handleRaise(playerIdx, amount)
+		showdown = be.handleRaise(playerIdx, amount)
 	default:
 		return false, fmt.Errorf("unknown_action_%s", action)
 	}
 
-	return false, nil
+	return showdown, nil
 }
 
 // Private helpers

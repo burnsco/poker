@@ -194,3 +194,82 @@ func TestLeave_DisconnectsPlayer(t *testing.T) {
 		t.Errorf("Expected client connections to be 0, got %d", tbl.state.ClientConnections[playerID])
 	}
 }
+
+func TestTable_NextHand(t *testing.T) {
+	tbl := NewTable("test-table", false)
+	
+	// Add 3 players
+	p1 := "p1"
+	p2 := "p2"
+	p3 := "p3"
+	tbl.Join(p1, "Alice")
+	tbl.Join(p2, "Bob")
+	tbl.Join(p3, "Charlie")
+
+	// Sit them in
+	tbl.ApplyAction("join_game", map[string]interface{}{"player_id": p1, "seat": 1, "player_name": "Alice"})
+	tbl.ApplyAction("join_game", map[string]interface{}{"player_id": p2, "seat": 2, "player_name": "Bob"})
+	tbl.ApplyAction("join_game", map[string]interface{}{"player_id": p3, "seat": 3, "player_name": "Charlie"})
+
+	// Set initial dealer to seat 3
+	tbl.state.HandState.DealerSeat = 3
+	
+	// Start next hand
+	// Operator check: player_id "1" is operator by default in Table.isOperator
+	tbl.ApplyAction("next_hand", map[string]interface{}{"player_id": "1"})
+
+	// Dealer rotation: 3 -> 1
+	if tbl.state.HandState.DealerSeat != 1 {
+		t.Errorf("Expected dealer seat 1, got %d", tbl.state.HandState.DealerSeat)
+	}
+	// SB should be 2, BB should be 3
+	if tbl.state.HandState.SmallBlindSeat != 2 {
+		t.Errorf("Expected SB seat 2, got %d", tbl.state.HandState.SmallBlindSeat)
+	}
+	if tbl.state.HandState.BigBlindSeat != 3 {
+		t.Errorf("Expected BB seat 3, got %d", tbl.state.HandState.BigBlindSeat)
+	}
+	// Action on seat 1 (because heads-up is special, but for 3 players, action starts after BB)
+	// For 3 players: Dealer(1), SB(2), BB(3). Action on 1? 
+	// Wait, nextHandPositions: 
+	// dealer := nextSeatInList(readySeats, 3) -> 1
+	// sb := nextSeatInList(readySeats, 1) -> 2
+	// bb := nextSeatInList(readySeats, 2) -> 3
+	// acting := nextSeatInList(readySeats, 3) -> 1
+	if *tbl.state.HandState.ActingSeat != 1 {
+		t.Errorf("Expected acting seat 1, got %d", *tbl.state.HandState.ActingSeat)
+	}
+
+	// Verify blinds were posted
+	if tbl.state.Players[1].BetThisStreet != SmallBlind { // Seat 2 is index 1
+		t.Errorf("Expected seat 2 to post SB %d, got %d", SmallBlind, tbl.state.Players[1].BetThisStreet)
+	}
+	if tbl.state.Players[2].BetThisStreet != BigBlind { // Seat 3 is index 2
+		t.Errorf("Expected seat 3 to post BB %d, got %d", BigBlind, tbl.state.Players[2].BetThisStreet)
+	}
+}
+
+func TestTable_HandInitialization(t *testing.T) {
+	tbl := NewTable("test-table", false)
+	tbl.Join("p1", "Alice")
+	tbl.Join("p2", "Bob")
+	tbl.ApplyAction("join_game", map[string]interface{}{"player_id": "p1", "seat": 1, "player_name": "Alice"})
+	tbl.ApplyAction("join_game", map[string]interface{}{"player_id": "p2", "seat": 2, "player_name": "Bob"})
+
+	tbl.ApplyAction("next_hand", map[string]interface{}{"player_id": "1"})
+
+	if tbl.state.HandState.Status != "in_progress" {
+		t.Errorf("Expected hand status in_progress, got %s", tbl.state.HandState.Status)
+	}
+	if tbl.state.HandState.Stage != "preflop" {
+		t.Errorf("Expected stage preflop, got %s", tbl.state.HandState.Stage)
+	}
+	if len(tbl.state.HandState.Deck) != 52-4 { // 2 players * 2 cards
+		t.Errorf("Expected deck to have 48 cards, got %d", len(tbl.state.HandState.Deck))
+	}
+	for i := 0; i < 2; i++ {
+		if tbl.state.Players[i].HoleCards[0] == "" || tbl.state.Players[i].HoleCards[1] == "" {
+			t.Errorf("Expected player %d to have hole cards", i+1)
+		}
+	}
+}

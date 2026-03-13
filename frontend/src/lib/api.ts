@@ -70,6 +70,9 @@ export async function requestJson<T>(
   init?: RequestInit,
   fallbackMessage?: string,
 ): Promise<T> {
+  if (process.env.NODE_ENV === "test") {
+    console.log(`[TEST FETCH] ${input.toString()}`);
+  }
   const response = await fetch(input, init);
   const payload = await readJsonSafely(response);
 

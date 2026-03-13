@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import type { BackendTable } from "../../types/backend";
 import { PokerGameClient } from "../PokerGameClient";
 
@@ -51,6 +51,8 @@ function buildTable(overrides: Partial<BackendTable> = {}): BackendTable {
       dealer_seat: 2,
       small_blind_seat: 3,
       big_blind_seat: 4,
+      small_blind: 10,
+      big_blind: 20,
       community_cards: ["2h", "7d", "Tc"],
       action_log: ["Hand 2 started."],
       action_log_seq: 1,

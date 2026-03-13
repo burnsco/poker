@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { getBackendUrl, requestJson } from "../lib/api";
 import type { BackendHealth, BackendTable } from "../types/backend";
+import { usePokerStore } from "../store/usePokerStore";
 
 type SocketMessage = [string | null, string | null, string, string, unknown];
 type TableActionPayload = {
@@ -39,14 +40,18 @@ type UsePokerTableResult = {
 
 export function usePokerTable(tableId = "default"): UsePokerTableResult {
   const { user } = useAuth();
+  const {
+    table: backendTable,
+    health: backendHealth,
+    connectionState: backendState,
+    setTable: setBackendTable,
+    setHealth: setBackendHealth,
+    setConnectionState: setBackendState,
+  } = usePokerStore();
 
   // Provide fallbacks during initial load or error states
   const playerId = user ? String(user.id) : "";
   const playerName = user ? user.username : "";
-
-  const [backendHealth, setBackendHealth] = useState<BackendHealth | null>(null);
-  const [backendTable, setBackendTable] = useState<BackendTable | null>(null);
-  const [backendState, setBackendState] = useState("Connecting backend...");
 
   const loadBackendState = useCallback(
     async (signal?: AbortSignal) => {
@@ -77,7 +82,7 @@ export function usePokerTable(tableId = "default"): UsePokerTableResult {
         }
       }
     },
-    [tableId],
+    [tableId, setBackendHealth, setBackendTable, setBackendState],
   );
 
   const sendAction = useCallback(
@@ -107,7 +112,7 @@ export function usePokerTable(tableId = "default"): UsePokerTableResult {
 
       setBackendState("WebSocket action synced");
     },
-    [playerId, playerName, tableId],
+    [playerName, tableId, setBackendState],
   );
 
   useEffect(() => {
@@ -238,7 +243,7 @@ export function usePokerTable(tableId = "default"): UsePokerTableResult {
       }
       cleanup();
     };
-  }, [playerId, playerName, tableId]);
+  }, [playerId, playerName, tableId, loadBackendState, setBackendTable, setBackendState]);
 
   return {
     playerId,
