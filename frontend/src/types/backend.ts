@@ -2,7 +2,6 @@ export type BackendHealth = {
   status: string;
   service: string;
   framework: string;
-  websocket_path: string;
 };
 
 export type BackendPlayer = {
@@ -39,6 +38,8 @@ export type BackendHandState = {
   dealer_seat: number;
   small_blind_seat: number;
   big_blind_seat: number;
+  small_blind: number;
+  big_blind: number;
   community_cards: string[];
   action_log: string[];
   action_log_seq: number;
