@@ -10,7 +10,9 @@ type TableActionPayload = {
   show_cards?: boolean;
 };
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
+const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL ||
+  (typeof window !== "undefined" ? window.location.origin : "");
 const WEBSOCKET_BASE =
   import.meta.env.VITE_BACKEND_WS_URL ||
   (typeof window !== "undefined"

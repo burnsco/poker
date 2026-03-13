@@ -16,7 +16,9 @@ import type { Renderer } from "./ui/Renderer";
 
 const MAX_SEATS = 8;
 const TABLE_HASH_PREFIX = "#/tables/";
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
+const BACKEND_URL =
+	import.meta.env.VITE_BACKEND_URL ||
+	(typeof window !== "undefined" ? window.location.origin : "");
 const TABLE_STORAGE_KEY = "poker.lobby_tables";
 
 type SeatLayout = {
