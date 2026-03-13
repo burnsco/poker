@@ -10,10 +10,20 @@ type TableActionPayload = {
   show_cards?: boolean;
 };
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
-const WEBSOCKET_BASE = import.meta.env.VITE_BACKEND_WS_URL || "ws://localhost:4000/socket";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
+const WEBSOCKET_BASE =
+  import.meta.env.VITE_BACKEND_WS_URL ||
+  (typeof window !== "undefined"
+    ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/socket`
+    : "ws://localhost:4000/socket");
+
 const PLAYER_ID_STORAGE_KEY = "poker.player_id";
 const PROFILE_STORAGE_KEY = "poker.profile";
+
+function getBaseUrl() {
+  if (typeof window === "undefined") return "http://localhost:4000";
+  return window.location.origin;
+}
 
 function loadPlayerIdentity() {
   if (typeof window === "undefined") {
@@ -67,7 +77,8 @@ export function usePhoenixTable(tableId = "default"): UsePhoenixTableResult {
 
   const sendAction = useCallback(
     async (action: string, payload?: TableActionPayload) => {
-      const actionUrl = new URL(`${BACKEND_URL}/api/tables/${tableId}/actions`);
+      const baseUrl = BACKEND_URL || getBaseUrl();
+      const actionUrl = new URL(`${baseUrl}/api/tables/${tableId}/actions`);
       actionUrl.searchParams.set("action", action);
 
       await requestJson<BackendTable>(

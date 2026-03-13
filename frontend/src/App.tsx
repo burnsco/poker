@@ -16,7 +16,7 @@ import type { Renderer } from "./ui/Renderer";
 
 const MAX_SEATS = 8;
 const TABLE_HASH_PREFIX = "#/tables/";
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
 const TABLE_STORAGE_KEY = "poker.lobby_tables";
 
 type SeatLayout = {
@@ -204,7 +204,8 @@ async function postTableAction(
 	action: string,
 	payload: Record<string, unknown> = {},
 ) {
-	const actionUrl = new URL(`${BACKEND_URL}/api/tables/${tableId}/actions`);
+	const baseUrl = BACKEND_URL || (typeof window !== "undefined" ? window.location.origin : "");
+	const actionUrl = new URL(`${baseUrl}/api/tables/${tableId}/actions`);
 	actionUrl.searchParams.set("action", action);
 
 	return requestJson<BackendTable>(
