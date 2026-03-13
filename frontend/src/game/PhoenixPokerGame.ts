@@ -265,7 +265,7 @@ export class PhoenixPokerGame {
           isBot: backendPlayer.is_bot,
           isCurrentUser: String(backendPlayer.player_id) === String(this.playerId),
           willPlayNextHand: backendPlayer.will_play_next_hand,
-          showCards: backendPlayer.show_cards,
+          showCards: backendPlayer.show_cards ?? false,
           betThisStreet,
           contributedThisHand,
           hand: holeCards,

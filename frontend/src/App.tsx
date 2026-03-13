@@ -79,63 +79,35 @@ const TEST_TABLE: LobbyTable = {
 	stakes: "50 / 100",
 };
 
-function createSeatLayouts(coordinates: SeatCoordinate[]): SeatLayout[] {
-	return coordinates.map(({ seatX, seatY }) => ({
-		seatX,
-		seatY,
-	}));
+function calculateRadialSeats(width: number, height: number): SeatLayout[] {
+	const shortLandscape = width > height && height <= 560;
+	const isMobilePortrait = width <= 760;
+
+	let rx = 44;
+	let ry = 48;
+	let cy = 56;
+
+	if (isMobilePortrait) {
+		rx = 43;
+		ry = 48;
+		cy = 54;
+	} else if (shortLandscape) {
+		rx = 45;
+		ry = 46;
+		cy = 56;
+	}
+
+	return Array.from({ length: MAX_SEATS }, (_, i) => {
+		const angle = (Math.PI / 2) + (i * 2 * Math.PI) / MAX_SEATS;
+		return {
+			seatX: 50 + rx * Math.cos(angle),
+			seatY: cy + ry * Math.sin(angle),
+		};
+	});
 }
 
-const DESKTOP_SEAT_LAYOUTS = createSeatLayouts([
-	{ seatX: 50, seatY: 104 },
-	{ seatX: 18, seatY: 104 },
-	{ seatX: 6, seatY: 50 },
-	{ seatX: 18, seatY: 8 },
-	{ seatX: 50, seatY: 8 },
-	{ seatX: 82, seatY: 8 },
-	{ seatX: 94, seatY: 50 },
-	{ seatX: 82, seatY: 104 },
-]);
-
-const TABLET_SEAT_LAYOUTS = createSeatLayouts([
-	{ seatX: 50, seatY: 104 },
-	{ seatX: 18, seatY: 104 },
-	{ seatX: 6, seatY: 50 },
-	{ seatX: 18, seatY: 8 },
-	{ seatX: 50, seatY: 8 },
-	{ seatX: 82, seatY: 8 },
-	{ seatX: 94, seatY: 50 },
-	{ seatX: 82, seatY: 104 },
-]);
-
-const MOBILE_PORTRAIT_SEAT_LAYOUTS = createSeatLayouts([
-	{ seatX: 50, seatY: 104 },
-	{ seatX: 18, seatY: 104 },
-	{ seatX: 8, seatY: 50 },
-	{ seatX: 18, seatY: 8 },
-	{ seatX: 50, seatY: 8 },
-	{ seatX: 82, seatY: 8 },
-	{ seatX: 92, seatY: 50 },
-	{ seatX: 82, seatY: 104 },
-]);
-
-const MOBILE_LANDSCAPE_SEAT_LAYOUTS = createSeatLayouts([
-	{ seatX: 50, seatY: 104 },
-	{ seatX: 18, seatY: 104 },
-	{ seatX: 8, seatY: 50 },
-	{ seatX: 18, seatY: 8 },
-	{ seatX: 50, seatY: 8 },
-	{ seatX: 82, seatY: 8 },
-	{ seatX: 92, seatY: 50 },
-	{ seatX: 82, seatY: 104 },
-]);
-
 function pickSeatLayout(width: number, height: number): SeatLayout[] {
-	const shortLandscape = width > height && height <= 560;
-	if (shortLandscape) return MOBILE_LANDSCAPE_SEAT_LAYOUTS;
-	if (width <= 760) return MOBILE_PORTRAIT_SEAT_LAYOUTS;
-	if (width <= 1100) return TABLET_SEAT_LAYOUTS;
-	return DESKTOP_SEAT_LAYOUTS;
+	return calculateRadialSeats(width, height);
 }
 
 function getTableIdFromHash(hash: string): string | null {
@@ -962,7 +934,11 @@ function TableScreen({
 	const [backendOverlayCollapsed, setBackendOverlayCollapsed] = useState(true);
 	const [handLogCollapsed, setHandLogCollapsed] = useState(true);
 	const [seatLayouts, setSeatLayouts] =
-		useState<SeatLayout[]>(DESKTOP_SEAT_LAYOUTS);
+		useState<SeatLayout[]>(() =>
+			typeof window !== "undefined"
+				? pickSeatLayout(window.innerWidth, window.innerHeight)
+				: calculateRadialSeats(1200, 800)
+		);
 	const [tableNotice, setTableNotice] = useState<string | null>(null);
 	const { playerId, backendHealth, backendTable, backendState, sendAction } =
 		usePhoenixTable(tableId);
@@ -1340,7 +1316,7 @@ function TableScreen({
 
 					<div className="table-seats">
 						{Array.from({ length: MAX_SEATS }, (_, seat) => {
-							const layout = seatLayouts[seat] || DESKTOP_SEAT_LAYOUTS[seat];
+							const layout = seatLayouts[seat] || calculateRadialSeats(1200, 800)[seat];
 							const style = {
 								"--seat-x": `${layout.seatX}%`,
 								"--seat-y": `${layout.seatY}%`,

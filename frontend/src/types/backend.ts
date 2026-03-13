@@ -12,7 +12,7 @@ export type BackendPlayer = {
   status: string;
   is_bot: boolean;
   will_play_next_hand: boolean;
-  show_cards: boolean;
+  show_cards?: boolean;
   player_id: string | null;
   connected: boolean;
   bet_this_street: number;

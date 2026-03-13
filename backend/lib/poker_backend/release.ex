@@ -5,7 +5,7 @@ defmodule PokerBackend.Release do
     load_app()
 
     for repo <- repos() do
-      repo.__adapter__.storage_up(repo.config())
+      repo.__adapter__().storage_up(repo.config())
     end
   end
 
