@@ -13,9 +13,12 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtSecret = getJWTSecret()
+var jwtSecret []byte
 
 func getJWTSecret() []byte {
+	if testing.Testing() {
+		return []byte("test-secret-key")
+	}
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
 		log.Fatal("JWT_SECRET environment variable must be set")
@@ -23,10 +26,11 @@ func getJWTSecret() []byte {
 	return []byte(secret)
 }
 
-func init() {
-	if testing.Testing() {
-		jwtSecret = []byte("test-secret-key")
+func getSecret() []byte {
+	if jwtSecret == nil {
+		jwtSecret = getJWTSecret()
 	}
+	return jwtSecret
 }
 
 type Claims struct {
@@ -49,7 +53,7 @@ func GenerateToken(userID uint, email string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
+	return token.SignedString(getSecret())
 }
 
 // ValidateToken parses and validates a JWT
@@ -58,7 +62,7 @@ func ValidateToken(tokenString string) (*Claims, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return jwtSecret, nil
+		return getSecret(), nil
 	})
 
 	if err != nil {

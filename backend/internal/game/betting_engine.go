@@ -25,6 +25,17 @@ func (t *Table) processHandAction(action string, payload map[string]interface{})
 		t.invalidAction("invalid_actor")
 		return
 	}
+
+	// Validate that the authenticated user matches the acting player
+	if playerID, ok := payload["player_id"].(string); ok {
+		if player.PlayerID == nil || *player.PlayerID != playerID {
+			t.invalidAction("unauthorized_action")
+			return
+		}
+	} else {
+		t.invalidAction("missing_player_id")
+		return
+	}
 	toCall := t.state.HandState.CurrentBet - player.BetThisStreet
 	if toCall < 0 {
 		toCall = 0

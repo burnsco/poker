@@ -69,8 +69,8 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		claims, err := auth.ValidateToken(cookie.Value)
 		if err == nil {
-			// Using email as playerID for compatibility with existing logic
-			playerID = claims.Email
+			// Using user ID as playerID for consistency with client
+			playerID = fmt.Sprintf("%d", claims.UserID)
 		}
 	}
 
@@ -122,13 +122,14 @@ func (c *Client) handleMessage(msg PhoenixMessage) {
 	event := msg.Event()
 	payload := msg.Payload()
 
-	if event == "phx_join" {
+	switch event {
+	case "phx_join":
 		c.handleJoin(topic, msg.JoinRef(), msg.MsgRef(), payload)
-	} else if event == "heartbeat" {
+	case "heartbeat":
 		c.sendReply(topic, "phx_reply", msg.MsgRef(), map[string]interface{}{"status": "ok", "response": map[string]interface{}{}})
-	} else if event == "ping" {
+	case "ping":
 		c.sendReply(topic, "phx_reply", msg.MsgRef(), map[string]interface{}{"status": "ok", "response": map[string]interface{}{"type": "pong"}})
-	} else if event == "action" {
+	case "action":
 		c.handleAction(topic, msg.MsgRef(), payload)
 	}
 }

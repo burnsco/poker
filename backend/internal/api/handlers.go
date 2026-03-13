@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"poker-backend/internal/auth"
@@ -68,9 +69,9 @@ func TableAction(c *gin.Context) {
 	}
 
 	// Override or set player_id from authenticated user
-	userEmail, exists := c.Get("userEmail")
+	userID, exists := c.Get("userID")
 	if exists {
-		payload["player_id"] = userEmail
+		payload["player_id"] = fmt.Sprintf("%d", userID.(uint))
 	}
 
 	t.ApplyAction(action, payload)
