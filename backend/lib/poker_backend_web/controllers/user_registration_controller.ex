@@ -2,11 +2,12 @@ defmodule PokerBackendWeb.UserRegistrationController do
   use PokerBackendWeb, :controller
 
   alias PokerBackend.Accounts
-  alias PokerBackend.Accounts.User
 
   def new(conn, _params) do
-    changeset = Accounts.change_user_email(%User{})
-    render(conn, :new, changeset: changeset)
+    render(conn, :new,
+      form: Phoenix.Component.to_form(%{}, as: "user"),
+      errors: []
+    )
   end
 
   def create(conn, %{"user" => user_params}) do
@@ -26,7 +27,14 @@ defmodule PokerBackendWeb.UserRegistrationController do
         |> redirect(to: ~p"/users/log-in")
 
       {:error, %Ecto.Changeset{} = changeset} ->
-        render(conn, :new, changeset: changeset)
+        render(conn, :new,
+          form:
+            Phoenix.Component.to_form(
+              Map.take(user_params, ["email", "username"]),
+              as: "user"
+            ),
+          errors: changeset.errors
+        )
     end
   end
 end

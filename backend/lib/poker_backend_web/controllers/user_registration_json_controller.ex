@@ -14,7 +14,8 @@ defmodule PokerBackendWeb.UserRegistrationJSONController do
       {:error, %Ecto.Changeset{} = changeset} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> render(PokerBackendWeb.UserJSON, :error, changeset: changeset)
+        |> put_view(PokerBackendWeb.UserJSON)
+        |> render(:error, changeset: changeset)
     end
   end
 end

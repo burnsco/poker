@@ -11,7 +11,7 @@ defmodule PokerBackendWeb.UserSessionJSONController do
     else
       conn
       |> put_status(:unauthorized)
-      |> json(%{error: "Invalid email or password"})
+      |> json(%{error: "Invalid email or password", code: "invalid_credentials"})
     end
   end
 
@@ -23,11 +23,12 @@ defmodule PokerBackendWeb.UserSessionJSONController do
   def show(conn, _params) do
     if user = conn.assigns.current_scope && conn.assigns.current_scope.user do
       conn
-      |> render(PokerBackendWeb.UserJSON, :show, user: user)
+      |> put_view(PokerBackendWeb.UserJSON)
+      |> render(:show, user: user)
     else
       conn
       |> put_status(:unauthorized)
-      |> json(%{error: "Not authenticated"})
+      |> json(%{error: "Not authenticated", code: "not_authenticated"})
     end
   end
 end

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { requestJson } from "../lib/api";
 import type { BackendHealth, BackendTable } from "../types/backend";
 
 type PhoenixMessage = [string | null, string | null, string, string, unknown];
@@ -69,27 +70,26 @@ export function usePhoenixTable(tableId = "default"): UsePhoenixTableResult {
       const actionUrl = new URL(`${BACKEND_URL}/api/tables/${tableId}/actions`);
       actionUrl.searchParams.set("action", action);
 
-      const response = await fetch(actionUrl.toString(), {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
+      await requestJson<BackendTable>(
+        actionUrl,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            action,
+            amount: payload?.amount,
+            seat: payload?.seat,
+            show_cards: payload?.show_cards,
+            player_id: playerId,
+            player_name: playerName,
+          }),
         },
-        credentials: "include",
-        body: JSON.stringify({
-          action,
-          amount: payload?.amount,
-          seat: payload?.seat,
-          show_cards: payload?.show_cards,
-          player_id: playerId,
-          player_name: playerName,
-        }),
-      });
+        `Backend action failed: ${action}`,
+      );
 
-      if (!response.ok) {
-        throw new Error(`Backend action failed: ${action}`);
-      }
-
-      await response.json();
       setBackendState("Phoenix action synced");
     },
     [playerId, playerName, tableId],
@@ -108,21 +108,20 @@ export function usePhoenixTable(tableId = "default"): UsePhoenixTableResult {
 
     const loadBackendState = async () => {
       try {
-        const [healthResponse, tableResponse] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/health`, { credentials: "include" }),
-          fetch(`${BACKEND_URL}/api/tables/${tableId}`, {
-            credentials: "include",
-          }),
+        const [health, table] = await Promise.all([
+          requestJson<BackendHealth>(
+            `${BACKEND_URL}/api/health`,
+            { credentials: "include" },
+            "Backend health unavailable",
+          ),
+          requestJson<BackendTable>(
+            `${BACKEND_URL}/api/tables/${tableId}`,
+            {
+              credentials: "include",
+            },
+            "Backend table unavailable",
+          ),
         ]);
-
-        if (!healthResponse.ok || !tableResponse.ok) {
-          throw new Error("Backend HTTP request failed");
-        }
-
-        const [health, table] = (await Promise.all([
-          healthResponse.json(),
-          tableResponse.json(),
-        ])) as [BackendHealth, BackendTable];
 
         if (disposed) return;
         setBackendHealth(health);

@@ -36,13 +36,13 @@ defmodule PokerBackendWeb.Router do
 
     get "/health", HealthController, :show
     get "/tables/:table_id", TableController, :show
-    post "/tables/:table_id/actions", TableController, :update_action
     options "/*path", HealthController, :show
   end
 
   scope "/api", PokerBackendWeb do
     pipe_through :api_session
 
+    post "/tables/:table_id/actions", TableController, :update_action
     post "/users/register", UserRegistrationJSONController, :create
     post "/users/log-in", UserSessionJSONController, :create
     delete "/users/log-out", UserSessionJSONController, :delete

@@ -13,15 +13,42 @@
       </.header>
     </div>
 
-    <.form :let={f} for={@changeset} action={~p"/users/register"}>
+    <.form :let={f} for={@form} id="registration_form" action={~p"/users/register"}>
       <.input
-        field={f[:email]}
         type="email"
+        id={f[:email].id}
+        name={f[:email].name}
+        value={f[:email].value}
         label="Email"
+        errors={translate_errors(@errors, :email)}
         autocomplete="username"
         spellcheck="false"
         required
         phx-mounted={JS.focus()}
+      />
+
+      <.input
+        type="text"
+        id={f[:username].id}
+        name={f[:username].name}
+        value={f[:username].value}
+        label="Username"
+        errors={translate_errors(@errors, :username)}
+        autocomplete="nickname"
+        spellcheck="false"
+        required
+      />
+
+      <.input
+        type="password"
+        id={f[:password].id}
+        name={f[:password].name}
+        value={f[:password].value}
+        label="Password"
+        errors={translate_errors(@errors, :password)}
+        autocomplete="new-password"
+        spellcheck="false"
+        required
       />
 
       <.button phx-disable-with="Creating account..." class="btn btn-primary w-full">

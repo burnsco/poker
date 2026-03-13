@@ -47,7 +47,8 @@ defmodule PokerBackendWeb.UserAuth do
     conn
     |> create_or_extend_session(user, params)
     |> put_status(:ok)
-    |> render(PokerBackendWeb.UserJSON, :show, user: user)
+    |> put_view(PokerBackendWeb.UserJSON)
+    |> render(:show, user: user)
   end
 
   @doc """
@@ -208,7 +209,7 @@ defmodule PokerBackendWeb.UserAuth do
   Plug for routes that require the user to not be authenticated.
   """
   def redirect_if_user_is_authenticated(conn, _opts) do
-    if conn.assigns.current_scope do
+    if conn.assigns[:current_scope] && conn.assigns.current_scope.user do
       conn
       |> redirect(to: signed_in_path(conn))
       |> halt()

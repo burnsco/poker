@@ -21,6 +21,6 @@ defmodule PokerBackendWeb.UserJSON do
       end)
     end)
 
-    %{errors: errors}
+    %{error: "Please fix the highlighted fields.", errors: errors}
   end
 end

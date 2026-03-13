@@ -1,8 +1,18 @@
 defmodule PokerBackendWeb.TableControllerTest do
   use PokerBackendWeb.ConnCase, async: false
 
+  import PokerBackend.AccountsFixtures
+
   defp unique_table_id do
     "table-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
+  end
+
+  defp table_user do
+    PokerBackend.Accounts.get_user_by_email("table-controller@example.com") ||
+      user_fixture(%{
+        email: "table-controller@example.com",
+        username: "table_controller"
+      })
   end
 
   defp fetch_table(table_id) do
@@ -13,13 +23,23 @@ defmodule PokerBackendWeb.TableControllerTest do
 
   defp action(table_id, action, params \\ %{}) do
     build_conn()
+    |> log_in_user(table_user())
     |> post(~p"/api/tables/#{table_id}/actions?action=#{action}", params)
     |> json_response(200)
   end
 
   defp action_conn(table_id, action, params \\ %{}, remote_ip \\ {127, 0, 0, 1}) do
-    conn = %{build_conn() | remote_ip: remote_ip}
+    conn =
+      build_conn()
+      |> log_in_user(table_user())
+      |> Map.put(:remote_ip, remote_ip)
+
     post(conn, ~p"/api/tables/#{table_id}/actions?action=#{action}", params)
+  end
+
+  defp guest_action_conn(table_id, action, params \\ %{}) do
+    build_conn()
+    |> post(~p"/api/tables/#{table_id}/actions?action=#{action}", params)
   end
 
   defp dealt_cards(state) do
@@ -208,6 +228,19 @@ defmodule PokerBackendWeb.TableControllerTest do
     assert fetch_table(table_id)["table_id"] == table_id
   end
 
+  test "rejects guest table mutations while allowing guest reads" do
+    table_id = unique_table_id()
+
+    assert fetch_table(table_id)["table_id"] == table_id
+
+    conn = guest_action_conn(table_id, "clear_table")
+
+    assert %{
+             "code" => "authentication_required",
+             "error" => "Log in to take a seat or manage table actions."
+           } = json_response(conn, 401)
+  end
+
   test "allows bursts when the action rate limiter is disabled" do
     previous_config =
       Application.get_env(:poker_backend, PokerBackendWeb.Plugs.TableActionRateLimit)
@@ -237,6 +270,7 @@ defmodule PokerBackendWeb.TableControllerTest do
 
   test "seats a human immediately and deals them into the next hand" do
     table_id = unique_table_id()
+    user = table_user()
     _ = fetch_table(table_id)
 
     action(table_id, "clear_table")
@@ -244,19 +278,17 @@ defmodule PokerBackendWeb.TableControllerTest do
 
     seated =
       action(table_id, "join_game", %{
-        "player_id" => "player-1",
-        "player_name" => "Hero",
         "seat" => 2
       })
 
-    hero = Enum.find(seated["players"], &(&1["player_id"] == "player-1"))
+    hero = Enum.find(seated["players"], &(&1["player_id"] == user.id))
 
     assert hero["seat"] == 2
     assert hero["status"] == "READY"
     assert hero["will_play_next_hand"]
 
-    started = action(table_id, "next_hand", %{"player_id" => "player-1"})
-    hero_in_hand = Enum.find(started["players"], &(&1["player_id"] == "player-1"))
+    started = action(table_id, "next_hand")
+    hero_in_hand = Enum.find(started["players"], &(&1["player_id"] == user.id))
 
     assert hero_in_hand["status"] == "ACTIVE"
     assert Enum.all?(hero_in_hand["hole_cards"], &(is_binary(&1) and byte_size(&1) == 2))
@@ -264,19 +296,18 @@ defmodule PokerBackendWeb.TableControllerTest do
 
   test "starts sparse heads-up tables with blinds on occupied seats" do
     table_id = unique_table_id()
+    user = table_user()
     _ = fetch_table(table_id)
 
     action(table_id, "clear_table")
     action(table_id, "add_bot", %{"seat" => 1})
 
     action(table_id, "join_game", %{
-      "player_id" => "player-heads-up",
-      "player_name" => "Hero",
       "seat" => 4
     })
 
-    started = action(table_id, "next_hand", %{"player_id" => "player-heads-up"})
-    hero = Enum.find(started["players"], &(&1["player_id"] == "player-heads-up"))
+    started = action(table_id, "next_hand")
+    hero = Enum.find(started["players"], &(&1["player_id"] == user.id))
     bot = Enum.find(started["players"], &(&1["seat"] == 1))
 
     assert started["hand_state"]["dealer_seat"] == 4
@@ -286,7 +317,7 @@ defmodule PokerBackendWeb.TableControllerTest do
     assert hero["bet_this_street"] == 10
     assert bot["bet_this_street"] == 20
 
-    called = action(table_id, "call", %{"player_id" => "player-heads-up"})
+    called = action(table_id, "call")
 
     assert called["last_event"] == "Seat 4 calls 10."
     assert called["hand_state"]["acting_seat"] == 1
@@ -294,18 +325,17 @@ defmodule PokerBackendWeb.TableControllerTest do
 
   test "queues a human for the next hand when claiming a bot seat mid-hand" do
     table_id = unique_table_id()
+    user = table_user()
     _ = fetch_table(table_id)
 
     action(table_id, "next_hand")
 
     queued =
       action(table_id, "join_game", %{
-        "player_id" => "player-queue",
-        "player_name" => "Hero",
         "seat" => 2
       })
 
-    pending = Enum.find(queued["pending_players"], &(&1["player_id"] == "player-queue"))
+    pending = Enum.find(queued["pending_players"], &(&1["player_id"] == user.id))
 
     assert pending["desired_seat"] == 2
     assert pending["will_play_next_hand"]

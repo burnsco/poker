@@ -1,6 +1,6 @@
 # Stage 1: Base image
 FROM elixir:1.15.7-otp-26-alpine AS base
-RUN apk add --no-cache libstdc++ openssl ncurses-libs build-base git python3
+RUN apk add --no-cache libstdc++ openssl ncurses-libs build-base git python3 curl inotify-tools
 WORKDIR /app
 RUN mix local.hex --force && mix local.rebar --force
 

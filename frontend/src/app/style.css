@@ -132,10 +132,28 @@ body {
 	flex-wrap: wrap;
 	justify-content: flex-end;
 	gap: 0.42rem;
+	align-items: center;
 }
 
 .profile-btn {
 	min-width: 170px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.profile-balance,
+.session-chip {
+	font-size: 0.72rem;
+	color: var(--text-muted);
+}
+
+.session-chip {
+	padding: 0.45rem 0.75rem;
+	border-radius: 999px;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	background: rgba(255, 255, 255, 0.05);
 }
 
 .lobby-shell {
@@ -144,9 +162,9 @@ body {
 	width: min(1180px, 100%);
 	margin: 0 auto;
 	border-radius: 28px;
-	padding: clamp(1rem, 1.8vw, 1.6rem);
+	padding: clamp(1rem, 1.8vw, 1.7rem);
 	display: grid;
-	gap: 1.1rem;
+	gap: 1.15rem;
 }
 
 .lobby-hero {
@@ -204,7 +222,7 @@ body {
 .lobby-main-grid {
 	display: grid;
 	grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-	gap: 0.95rem;
+	gap: 1rem;
 }
 
 .lobby-column {
@@ -222,13 +240,13 @@ body {
 .games-card,
 .extra-card {
 	border-radius: 18px;
-	padding: 0.86rem 0.95rem;
+	padding: 1rem 1.02rem;
 }
 
 .create-table-card,
 .auth-card {
 	display: grid;
-	gap: 0.52rem;
+	gap: 0.65rem;
 }
 
 .create-table-card h2,
@@ -240,8 +258,17 @@ body {
 .create-table-card p,
 .auth-card p,
 .extra-card p {
-	font-size: 0.76rem;
+	font-size: 0.8rem;
 	color: var(--text-muted);
+	line-height: 1.45;
+}
+
+.card-eyebrow {
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: #9fd4ff;
 }
 
 .create-table-card label,
@@ -260,20 +287,91 @@ body {
 	border: 1px solid rgba(255, 255, 255, 0.16);
 	color: var(--text-main);
 	border-radius: 10px;
-	padding: 0.48rem 0.54rem;
+	padding: 0.62rem 0.68rem;
 	font-size: 0.85rem;
 	font-family: "Outfit", sans-serif;
+	transition:
+		border-color 160ms ease,
+		background 160ms ease,
+		transform 160ms ease;
+}
+
+.create-table-card input:disabled,
+.auth-card input:disabled {
+	opacity: 0.62;
+	cursor: not-allowed;
 }
 
 .create-table-card input:focus,
 .auth-card input:focus {
 	outline: 1px solid var(--accent-color);
 	border-color: var(--accent-color);
+	background: rgba(6, 17, 31, 0.92);
+	transform: translateY(-1px);
 }
 
 .auth-actions {
 	display: flex;
 	gap: 0.42rem;
+	flex-wrap: wrap;
+}
+
+.auth-cta-group {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.55rem;
+}
+
+.auth-link-btn {
+	border: 0;
+	padding: 0;
+	background: transparent;
+	color: #9fd4ff;
+	font: inherit;
+	font-size: 0.8rem;
+	text-align: left;
+	cursor: pointer;
+}
+
+.auth-link-btn:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.account-summary {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.6rem;
+	padding: 0.75rem 0.8rem;
+	border-radius: 14px;
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.account-summary strong {
+	display: block;
+	margin-top: 0.15rem;
+	font-size: 0.9rem;
+}
+
+.account-label,
+.panel-note {
+	font-size: 0.72rem;
+	color: var(--text-muted);
+}
+
+.panel-message {
+	padding: 0.68rem 0.78rem;
+	border-radius: 12px;
+	border: 1px solid transparent;
+	font-size: 0.78rem;
+	line-height: 1.4;
+}
+
+.panel-message-error {
+	background: rgba(214, 88, 88, 0.12);
+	border-color: rgba(214, 88, 88, 0.36);
+	color: #ffd7d7;
 }
 
 .games-card-header {
@@ -362,6 +460,36 @@ body {
 	color: var(--text-muted);
 }
 
+.lobby-banner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.8rem;
+	padding: 0.78rem 0.88rem;
+	border-radius: 16px;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	background: rgba(255, 255, 255, 0.05);
+}
+
+.lobby-banner-success {
+	border-color: rgba(104, 215, 155, 0.34);
+	background: rgba(36, 114, 74, 0.28);
+}
+
+.lobby-banner-error {
+	border-color: rgba(214, 88, 88, 0.34);
+	background: rgba(99, 34, 34, 0.3);
+}
+
+.lobby-banner-info {
+	border-color: rgba(47, 149, 255, 0.34);
+	background: rgba(25, 61, 96, 0.3);
+}
+
+.lobby-banner-dismiss {
+	flex-shrink: 0;
+}
+
 .extras-grid {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -382,6 +510,39 @@ body {
 
 .table-nav-btn {
 	width: auto;
+}
+
+.table-auth-banner,
+.table-inline-notice {
+	position: absolute;
+	left: 1rem;
+	z-index: 30;
+	max-width: min(420px, calc(100vw - 2rem));
+	border-radius: 18px;
+	padding: 0.9rem 1rem;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.9rem;
+}
+
+.table-auth-banner {
+	top: 1rem;
+}
+
+.table-auth-banner strong {
+	display: block;
+	margin-bottom: 0.18rem;
+}
+
+.table-auth-banner p {
+	font-size: 0.8rem;
+	color: var(--text-muted);
+}
+
+.table-inline-notice {
+	top: 7.1rem;
+	font-size: 0.8rem;
 }
 
 .glass-panel {
@@ -1627,6 +1788,11 @@ input[type="range"] {
 		width: 100%;
 	}
 
+	.account-summary,
+	.auth-cta-group {
+		grid-template-columns: 1fr;
+	}
+
 	.table-layout {
 		min-height: 0;
 		height: calc(
@@ -1723,6 +1889,11 @@ input[type="range"] {
 		grid-template-columns: 1fr;
 	}
 
+	.lobby-banner {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
 	.lobby-card {
 		grid-template-columns: 1fr;
 	}
@@ -1741,6 +1912,11 @@ input[type="range"] {
 
 	.auth-actions {
 		flex-direction: column;
+	}
+
+	.account-summary,
+	.auth-cta-group {
+		grid-template-columns: 1fr;
 	}
 
 	.extras-grid {
@@ -1764,6 +1940,13 @@ input[type="range"] {
 	.table-nav {
 		top: 0.6rem;
 		right: 0.6rem;
+	}
+
+	.table-auth-banner,
+	.table-inline-notice {
+		left: 0.75rem;
+		right: 0.75rem;
+		max-width: none;
 	}
 
 	.table-layout {

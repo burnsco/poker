@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { ApiRequestError, requestJson } from "../lib/api";
 
 export type User = {
   id: number;
@@ -9,6 +10,10 @@ export type User = {
 
 type AuthContextType = {
   user: User | null;
+  authError: string | null;
+  authPending: boolean;
+  clearAuthError: () => void;
+  isAuthenticated: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, username: string, password: string) => Promise<void>;
@@ -18,25 +23,33 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authPending, setAuthPending] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const clearAuthError = useCallback(() => {
+    setAuthError(null);
+  }, []);
 
   const refreshUser = useCallback(async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/users/me`, {
-        credentials: 'include'
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.data);
-      } else {
-        setUser(null);
-      }
+      const data = await requestJson<{ data: User }>(
+        `${BACKEND_URL}/api/users/me`,
+        {
+          credentials: "include",
+        },
+        "Failed to restore your session",
+      );
+
+      setUser(data.data);
     } catch (error) {
-      console.error('Failed to fetch user', error);
+      if (!(error instanceof ApiRequestError && error.status === 401)) {
+        console.error("Failed to fetch user", error);
+      }
       setUser(null);
     } finally {
       setLoading(false);
@@ -48,49 +61,95 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [refreshUser]);
 
   const login = async (email: string, password: string) => {
-    const response = await fetch(`${BACKEND_URL}/api/users/log-in`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user: { email, password } }),
-      credentials: 'include'
-    });
+    setAuthPending(true);
+    setAuthError(null);
 
-    if (response.ok) {
-      const data = await response.json();
+    try {
+      const data = await requestJson<{ data: User }>(
+        `${BACKEND_URL}/api/users/log-in`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user: { email, password } }),
+          credentials: "include",
+        },
+        "Login failed",
+      );
+
       setUser(data.data);
-    } else {
-      const data = await response.json();
-      throw new Error(data.error || 'Login failed');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Login failed";
+      setAuthError(message);
+      throw error;
+    } finally {
+      setAuthPending(false);
     }
   };
 
   const register = async (email: string, username: string, password: string) => {
-    const response = await fetch(`${BACKEND_URL}/api/users/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user: { email, username, password } }),
-      credentials: 'include'
-    });
+    setAuthPending(true);
+    setAuthError(null);
 
-    if (response.ok) {
-      const data = await response.json();
+    try {
+      const data = await requestJson<{ data: User }>(
+        `${BACKEND_URL}/api/users/register`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user: { email, username, password } }),
+          credentials: "include",
+        },
+        "Registration failed",
+      );
+
       setUser(data.data);
-    } else {
-      const data = await response.json();
-      throw new Error(Object.entries(data.errors).map(([k, v]) => `${k} ${v}`).join(', ') || 'Registration failed');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Registration failed";
+      setAuthError(message);
+      throw error;
+    } finally {
+      setAuthPending(false);
     }
   };
 
   const logout = async () => {
-    await fetch(`${BACKEND_URL}/api/users/log-out`, {
-      method: 'DELETE',
-      credentials: 'include'
-    });
-    setUser(null);
+    setAuthPending(true);
+    setAuthError(null);
+
+    try {
+      await requestJson<{ ok: boolean }>(
+        `${BACKEND_URL}/api/users/log-out`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        },
+        "Logout failed",
+      );
+      setUser(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Logout failed";
+      setAuthError(message);
+      throw error;
+    } finally {
+      setAuthPending(false);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        authError,
+        authPending,
+        clearAuthError,
+        isAuthenticated: user != null,
+        loading,
+        login,
+        register,
+        logout,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -99,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

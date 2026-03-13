@@ -15,6 +15,10 @@ down:
 
 deploy:
 	$(COMPOSE) -f docker-compose.deploy.yml up --build -d
+	$(MAKE) migrate
+
+migrate:
+	$(COMPOSE) -f docker-compose.deploy.yml exec backend /app/bin/poker_backend eval "PokerBackend.Release.migrate"
 
 deploy-down:
 	$(COMPOSE) -f docker-compose.deploy.yml down

@@ -7,14 +7,18 @@ defmodule PokerBackend.AccountsFixtures do
   import Ecto.Query
 
   alias PokerBackend.Accounts
-  alias PokerBackend.Accounts.Scope
+  alias PokerBackend.Accounts.{Scope, User}
+  alias PokerBackend.Repo
 
   def unique_user_email, do: "user#{System.unique_integer()}@example.com"
+  def unique_user_username, do: "user_#{System.unique_integer([:positive])}"
   def valid_user_password, do: "hello world!"
 
   def valid_user_attributes(attrs \\ %{}) do
     Enum.into(attrs, %{
-      email: unique_user_email()
+      email: unique_user_email(),
+      username: unique_user_username(),
+      password: valid_user_password()
     })
   end
 
@@ -30,13 +34,10 @@ defmodule PokerBackend.AccountsFixtures do
   def user_fixture(attrs \\ %{}) do
     user = unconfirmed_user_fixture(attrs)
 
-    token =
-      extract_user_token(fn url ->
-        Accounts.deliver_login_instructions(user, url)
-      end)
-
-    {:ok, {user, _expired_tokens}} =
-      Accounts.login_user_by_magic_link(token)
+    {:ok, user} =
+      user
+      |> User.confirm_changeset()
+      |> Repo.update()
 
     user
   end

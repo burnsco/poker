@@ -237,6 +237,16 @@ defmodule PokerBackendWeb.UserAuthTest do
       refute conn.halted
       refute conn.status
     end
+
+    test "does not redirect when a scope exists without a user", %{conn: conn} do
+      conn =
+        conn
+        |> assign(:current_scope, %Scope{user: nil})
+        |> UserAuth.redirect_if_user_is_authenticated([])
+
+      refute conn.halted
+      refute conn.status
+    end
   end
 
   describe "require_authenticated_user/2" do

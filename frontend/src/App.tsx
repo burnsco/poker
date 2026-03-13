@@ -10,6 +10,7 @@ import {
 import { PhoenixPokerGame } from "./game/PhoenixPokerGame";
 import { usePhoenixTable } from "./hooks/usePhoenixTable";
 import { useAuth } from "./contexts/AuthContext";
+import { ApiRequestError, requestJson } from "./lib/api";
 import type { BackendTable } from "./types/backend";
 import type { Renderer } from "./ui/Renderer";
 
@@ -48,6 +49,13 @@ type TableActionPayload = {
 	amount?: number;
 	seat?: number;
 	show_cards?: boolean;
+};
+
+type NoticeTone = "error" | "info" | "success";
+
+type LobbyNotice = {
+	text: string;
+	tone: NoticeTone;
 };
 
 const DEFAULT_TABLE: LobbyTable = {
@@ -169,13 +177,23 @@ function storeTables(tables: LobbyTable[]) {
 	window.localStorage.setItem(TABLE_STORAGE_KEY, JSON.stringify(tables));
 }
 
+function formatBalance(balance: number) {
+	return new Intl.NumberFormat("en-US").format(balance);
+}
+
+function isValidEmail(email: string) {
+	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 async function fetchTableState(tableId: string): Promise<BackendTable | null> {
 	try {
-		const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}`, {
-			credentials: "include",
-		});
-		if (!response.ok) return null;
-		return (await response.json()) as BackendTable;
+		return await requestJson<BackendTable>(
+			`${BACKEND_URL}/api/tables/${tableId}`,
+			{
+				credentials: "include",
+			},
+			"Failed to load table state",
+		);
 	} catch {
 		return null;
 	}
@@ -189,24 +207,31 @@ async function postTableAction(
 	const actionUrl = new URL(`${BACKEND_URL}/api/tables/${tableId}/actions`);
 	actionUrl.searchParams.set("action", action);
 
-	const response = await fetch(actionUrl.toString(), {
-		method: "POST",
-		headers: {
-			"content-type": "application/json",
+	return requestJson<BackendTable>(
+		actionUrl,
+		{
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+			},
+			credentials: "include",
+			body: JSON.stringify(payload),
 		},
-		credentials: "include",
-		body: JSON.stringify(payload),
-	});
-
-	if (!response.ok) {
-		throw new Error(`Action failed: ${action}`);
-	}
-
-	return (await response.json()) as BackendTable;
+		`Action failed: ${action}`,
+	);
 }
 
 function LobbyScreen() {
-	const { user, login, register, logout } = useAuth();
+	const {
+		user,
+		authError,
+		authPending,
+		clearAuthError,
+		loading,
+		login,
+		register,
+		logout,
+	} = useAuth();
 	const [storedTables, setStoredTables] = useState<LobbyTable[]>(() =>
 		loadStoredTables(),
 	);
@@ -216,10 +241,11 @@ function LobbyScreen() {
 	const [authEmail, setAuthEmail] = useState("");
 	const [authPassword, setAuthPassword] = useState("");
 	const [authName, setAuthName] = useState("");
+	const [authLocalError, setAuthLocalError] = useState<string | null>(null);
 	const [createName, setCreateName] = useState("Friday Night Hold'em");
 	const [createStakes, setCreateStakes] = useState("10 / 20");
 	const [createBusy, setCreateBusy] = useState(false);
-	const [lobbyMessage, setLobbyMessage] = useState<string | null>(null);
+	const [lobbyNotice, setLobbyNotice] = useState<LobbyNotice | null>(null);
 
 	const lobbyTables = useMemo(() => {
 		const map = new Map<string, LobbyTable>();
@@ -278,25 +304,101 @@ function LobbyScreen() {
 		};
 	}, [refreshGames]);
 
+	useEffect(() => {
+		if (!user) return;
+		setAuthMode(null);
+		setAuthEmail("");
+		setAuthPassword("");
+		setAuthName("");
+		setAuthLocalError(null);
+		clearAuthError();
+	}, [clearAuthError, user]);
+
+	const openAuthMode = useCallback(
+		(mode: "login" | "register", notice?: LobbyNotice) => {
+			setAuthMode(mode);
+			setAuthLocalError(null);
+			clearAuthError();
+			if (notice) {
+				setLobbyNotice(notice);
+			}
+		},
+		[clearAuthError],
+	);
+
 	const submitAuth = useCallback(async () => {
+		const trimmedEmail = authEmail.trim();
+		const trimmedName = authName.trim();
+		const trimmedPassword = authPassword.trim();
+
+		if (!isValidEmail(trimmedEmail)) {
+			setAuthLocalError("Enter a valid email address.");
+			return;
+		}
+
+		if (authMode === "register" && trimmedName.length < 3) {
+			setAuthLocalError("Display name must be at least 3 characters.");
+			return;
+		}
+
+		if (trimmedPassword.length < 6) {
+			setAuthLocalError("Password must be at least 6 characters.");
+			return;
+		}
+
+		setAuthLocalError(null);
+		clearAuthError();
+
 		try {
 			if (authMode === "login") {
-				await login(authEmail, authPassword);
+				await login(trimmedEmail, trimmedPassword);
 			} else if (authMode === "register") {
-				await register(authEmail, authName, authPassword);
+				await register(trimmedEmail, trimmedName, trimmedPassword);
 			}
-			setAuthMode(null);
-			setAuthEmail("");
-			setAuthPassword("");
-			setAuthName("");
-		} catch (error) {
-			setLobbyMessage(error instanceof Error ? error.message : "Auth failed");
+
+			setLobbyNotice({
+				tone: "success",
+				text:
+					authMode === "register"
+						? "Account created. Your session is active."
+						: "Welcome back. You're signed in.",
+			});
+		} catch {
+			// AuthContext owns server-error messaging.
 		}
-	}, [authMode, authEmail, authPassword, authName, login, register]);
+	}, [
+		authMode,
+		authEmail,
+		authName,
+		authPassword,
+		clearAuthError,
+		login,
+		register,
+	]);
+
+	const handleLogout = useCallback(async () => {
+		try {
+			await logout();
+			setLobbyNotice({ tone: "info", text: "You have been logged out." });
+		} catch (error) {
+			setLobbyNotice({
+				tone: "error",
+				text: error instanceof Error ? error.message : "Logout failed",
+			});
+		}
+	}, [logout]);
 
 	const createTable = useCallback(async () => {
+		if (!user) {
+			openAuthMode("login", {
+				tone: "info",
+				text: "Log in to create and manage private tables.",
+			});
+			return;
+		}
+
 		setCreateBusy(true);
-		setLobbyMessage(null);
+		setLobbyNotice(null);
 		const tableId = createTableId(createName);
 		const nextTable: LobbyTable = {
 			tableId,
@@ -313,12 +415,31 @@ function LobbyScreen() {
 			await fetchTableState(tableId);
 			await postTableAction(tableId, "clear_table");
 			navigateToTable(tableId);
-		} catch {
-			setLobbyMessage("Could not create table right now. Try again.");
+		} catch (error) {
+			if (error instanceof ApiRequestError && error.status === 401) {
+				openAuthMode("login", {
+					tone: "info",
+					text: "Your session expired. Log in again to create a table.",
+				});
+			} else {
+				setLobbyNotice({
+					tone: "error",
+					text: error instanceof Error ? error.message : "Could not create table right now.",
+				});
+			}
 		}
 
 		setCreateBusy(false);
-	}, [createName, createStakes, storedTables]);
+	}, [createName, createStakes, openAuthMode, storedTables, user]);
+
+	const authMessage = authLocalError ?? authError;
+	const authSubmitDisabled =
+		authPending ||
+		loading ||
+		!authMode ||
+		!isValidEmail(authEmail.trim()) ||
+		authPassword.trim().length < 6 ||
+		(authMode === "register" && authName.trim().length < 3);
 
 	return (
 		<div id="app" className="app-lobby">
@@ -333,12 +454,20 @@ function LobbyScreen() {
 				</div>
 
 				<div className="top-actions">
-					{user ? (
+					{loading ? (
+						<div className="session-chip">Checking session...</div>
+					) : user ? (
 						<>
 							<button type="button" className="btn tiny profile-btn">
-								{user.username} (🪙 {user.balance})
+								<span>{user.username}</span>
+								<span className="profile-balance">Balance {formatBalance(user.balance)}</span>
 							</button>
-							<button type="button" className="btn tiny" onClick={() => void logout()}>
+							<button
+								type="button"
+								className="btn tiny"
+								disabled={authPending}
+								onClick={() => void handleLogout()}
+							>
 								Logout
 							</button>
 						</>
@@ -347,14 +476,16 @@ function LobbyScreen() {
 							<button
 								type="button"
 								className="btn tiny"
-								onClick={() => setAuthMode("login")}
+								disabled={authPending}
+								onClick={() => openAuthMode("login")}
 							>
 								Login
 							</button>
 							<button
 								type="button"
 								className="btn primary tiny"
-								onClick={() => setAuthMode("register")}
+								disabled={authPending}
+								onClick={() => openAuthMode("register")}
 							>
 								Register
 							</button>
@@ -393,20 +524,35 @@ function LobbyScreen() {
 						</div>
 					</div>
 				</section>
+				{lobbyNotice ? (
+					<div className={`lobby-banner lobby-banner-${lobbyNotice.tone}`}>
+						<span>{lobbyNotice.text}</span>
+						<button
+							type="button"
+							className="btn tiny lobby-banner-dismiss"
+							onClick={() => setLobbyNotice(null)}
+						>
+							Dismiss
+						</button>
+					</div>
+				) : null}
 
 				<section className="lobby-main-grid">
 					<div className="lobby-column">
 						<div className="create-table-card glass-panel">
+							<p className="card-eyebrow">Private table</p>
 							<h2>Create Table</h2>
 							<p>
-								New tables start empty. Add bots inside the table one seat at a
-								time.
+								Spin up a clean room, then add bots or take the first seat from
+								inside the table.
 							</p>
 							<label>
 								Table Name
 								<input
 									type="text"
 									value={createName}
+									disabled={!user || createBusy || loading}
+									placeholder="Friday Night Hold'em"
 									onChange={(event) => setCreateName(event.target.value)}
 								/>
 							</label>
@@ -415,72 +561,167 @@ function LobbyScreen() {
 								<input
 									type="text"
 									value={createStakes}
+									disabled={!user || createBusy || loading}
+									placeholder="10 / 20"
 									onChange={(event) => setCreateStakes(event.target.value)}
 								/>
 							</label>
 							<button
 								type="button"
 								className="btn primary"
-								disabled={createBusy}
+								disabled={createBusy || loading}
 								onClick={() => void createTable()}
 							>
-								{createBusy ? "Creating..." : "Create Table"}
+								{!user ? "Log In to Create" : createBusy ? "Creating..." : "Create Table"}
 							</button>
-							{lobbyMessage ? (
-								<p className="lobby-inline-note">{lobbyMessage}</p>
-							) : null}
+							<p className="panel-note">
+								{user
+									? "Custom tables are attached to your signed-in stack."
+									: "Guests can browse. Signed-in players can create private tables."}
+							</p>
 						</div>
 
-						{authMode ? (
-							<div className="auth-card glass-panel">
-								<h2>{authMode === "login" ? "Login" : "Register"}</h2>
-								<p>
-									Enter your credentials to {authMode === "login" ? "login" : "register"}.
-								</p>
-								<label>
-									Email
-									<input
-										type="email"
-										value={authEmail}
-										onChange={(event) => setAuthEmail(event.target.value)}
-									/>
-								</label>
-								{authMode === "register" ? (
+						<div className={`auth-card glass-panel${authMode ? " is-open" : ""}`}>
+							<p className="card-eyebrow">
+								{user
+									? "Session active"
+									: authMode === "register"
+										? "Create account"
+										: authMode === "login"
+											? "Member login"
+											: "Account"}
+							</p>
+							<h2>
+								{user
+									? `Welcome back, ${user.username}`
+									: authMode === "register"
+										? "Create your poker account"
+										: authMode === "login"
+											? "Log in to play"
+											: "Keep your stack and take a seat"}
+							</h2>
+							<p>
+								{user
+									? "You're ready to join seats, manage tables, and keep your chip balance synced."
+									: authMode
+										? "Use your account to sit down, act in hands, and manage custom tables."
+										: "Guests can browse the lobby. Sign in to take seats, start hands, and create private rooms."}
+							</p>
+							{authMessage ? (
+								<p className="panel-message panel-message-error">{authMessage}</p>
+							) : null}
+
+							{user ? (
+								<div className="account-summary">
+									<div>
+										<span className="account-label">Signed in as</span>
+										<strong>{user.email}</strong>
+									</div>
+									<div>
+										<span className="account-label">Balance</span>
+										<strong>🪙 {formatBalance(user.balance)}</strong>
+									</div>
+								</div>
+							) : authMode ? (
+								<>
 									<label>
-										Display Name
+										Email
 										<input
-											type="text"
-											value={authName}
-											onChange={(event) => setAuthName(event.target.value)}
+											type="email"
+											value={authEmail}
+											autoComplete="email"
+											placeholder="you@example.com"
+											onChange={(event) => setAuthEmail(event.target.value)}
 										/>
 									</label>
-								) : null}
-								<label>
-									Password
-									<input
-										type="password"
-										value={authPassword}
-										onChange={(event) => setAuthPassword(event.target.value)}
-									/>
-								</label>
-								<div className="auth-actions">
+									{authMode === "register" ? (
+										<label>
+											Display Name
+											<input
+												type="text"
+												value={authName}
+												autoComplete="nickname"
+												placeholder="RiverRunner"
+												onChange={(event) => setAuthName(event.target.value)}
+											/>
+										</label>
+									) : null}
+									<label>
+										Password
+										<input
+											type="password"
+											value={authPassword}
+											autoComplete={
+												authMode === "login"
+													? "current-password"
+													: "new-password"
+											}
+											placeholder="At least 6 characters"
+											onChange={(event) => setAuthPassword(event.target.value)}
+										/>
+									</label>
+									<div className="auth-actions">
+										<button
+											type="button"
+											className="btn primary tiny"
+											disabled={authSubmitDisabled}
+											onClick={() => void submitAuth()}
+										>
+											{authPending
+												? authMode === "login"
+													? "Logging in..."
+													: "Creating..."
+												: authMode === "login"
+													? "Login"
+													: "Register"}
+										</button>
+										<button
+											type="button"
+											className="btn tiny"
+											disabled={authPending}
+											onClick={() => {
+												setAuthMode(null);
+												setAuthLocalError(null);
+												clearAuthError();
+											}}
+										>
+											Cancel
+										</button>
+									</div>
 									<button
 										type="button"
-										className="btn primary tiny"
-										onClick={() => void submitAuth()}
+										className="auth-link-btn"
+										disabled={authPending}
+										onClick={() =>
+											openAuthMode(authMode === "login" ? "register" : "login")
+										}
 									>
-										{authMode === "login" ? "Login" : "Register"}
+										{authMode === "login"
+											? "Need an account? Register"
+											: "Already have an account? Login"}
+									</button>
+								</>
+							) : (
+								<div className="auth-cta-group">
+									<button
+										type="button"
+										className="btn primary"
+										disabled={loading}
+										onClick={() => openAuthMode("register")}
+									>
+										Create Account
 									</button>
 									<button
 										type="button"
-										className="btn tiny"
-										onClick={() => setAuthMode(null)}
+										className="btn"
+										disabled={loading}
+										onClick={() => openAuthMode("login")}
 									>
-										Cancel
+										Log In
 									</button>
 								</div>
-							</div>
-						) : null}
+							)}
+						</div>
 					</div>
 
 					<div className="lobby-column wide">
@@ -579,14 +820,14 @@ function TableScreen({
 	tableId: string;
 	isCustomTable: boolean;
 }) {
+	const { loading, user } = useAuth();
 	const gameRef = useRef<PhoenixPokerGame | null>(null);
 	const rendererRef = useRef<Renderer | null>(null);
-	const autoStartAttemptRef = useRef<string | null>(null);
-	const customInitRef = useRef(false);
 	const [backendOverlayCollapsed, setBackendOverlayCollapsed] = useState(true);
 	const [handLogCollapsed, setHandLogCollapsed] = useState(true);
 	const [seatLayouts, setSeatLayouts] =
 		useState<SeatLayout[]>(DESKTOP_SEAT_LAYOUTS);
+	const [tableNotice, setTableNotice] = useState<string | null>(null);
 	const { playerId, backendHealth, backendTable, backendState, sendAction } =
 		usePhoenixTable(tableId);
 	const occupiedSeats = backendTable?.players.length ?? 0;
@@ -629,11 +870,6 @@ function TableScreen({
 	const canClearTable = backendTable?.hand_state.status !== "in_progress";
 	const handResult = backendTable?.hand_state.hand_result ?? null;
 	const handLogSummary = handResult?.heading ?? "Hand in progress";
-	const manualNextHandRequired =
-		backendTable?.players.some(
-			(player) =>
-				!player.is_bot && player.stack > 0 && player.will_play_next_hand,
-		) ?? false;
 	const logControlDebug = useEffectEvent((message: string) => {
 		const timestamp = new Date().toLocaleTimeString("en-US", {
 			hour12: false,
@@ -653,11 +889,15 @@ function TableScreen({
 
 			try {
 				await sendAction(action, payload);
+				setTableNotice(null);
 				logControlDebug(`${source}: action=${action} synced`);
 			} catch (error) {
 				const reason =
 					error instanceof Error ? error.message : "Unknown action failure";
 				logControlDebug(`${source}: action=${action} failed: ${reason}`);
+				if (error instanceof ApiRequestError && error.status === 401) {
+					setTableNotice("Log in from the lobby to take a seat or manage this table.");
+				}
 				throw error;
 			}
 		},
@@ -877,65 +1117,6 @@ function TableScreen({
 	}, [backendTable]);
 
 	useEffect(() => {
-		if (
-			!isCustomTable ||
-			!backendTable ||
-			customInitRef.current ||
-			backendTable.last_event !== "table_created"
-		) {
-			return;
-		}
-
-		const hasHumans = backendTable.players.some((player) => !player.is_bot);
-		if (hasHumans || backendTable.pending_players.length > 0) {
-			customInitRef.current = true;
-			return;
-		}
-
-		customInitRef.current = true;
-		void sendActionWithDebug("clear_table", undefined, "setup");
-	}, [backendTable, isCustomTable, sendActionWithDebug]);
-
-	useEffect(() => {
-		if (!backendTable) return;
-
-		if (backendTable.game_state !== "waiting_for_hand") {
-			autoStartAttemptRef.current = null;
-			return;
-		}
-
-		if (readySeats < 2) return;
-
-		const attemptKey = `${backendTable.hand_number}:${backendTable.last_event}`;
-		if (autoStartAttemptRef.current === attemptKey) return;
-
-		if (
-			backendTable.last_event !== "hand_complete" &&
-			backendTable.last_event !== "table_created"
-		) {
-			return;
-		}
-
-		if (manualNextHandRequired) {
-			return;
-		}
-
-		autoStartAttemptRef.current = attemptKey;
-		logControlDebug(
-			`recovery: scheduling next_hand from waiting state (hand=${backendTable.hand_number} ready=${readySeats})`,
-		);
-
-		const timer = window.setTimeout(() => {
-			if (gameRef.current?.view.street === "SHOWDOWN") return;
-			void sendActionWithDebug("next_hand", undefined, "recovery");
-		}, 5_400);
-
-		return () => {
-			window.clearTimeout(timer);
-		};
-	}, [backendTable, manualNextHandRequired, readySeats, sendActionWithDebug]);
-
-	useEffect(() => {
 		if (!backendTable) return;
 
 		const hero = backendTable.players.find(
@@ -968,6 +1149,34 @@ function TableScreen({
 					Back to Lobby
 				</button>
 			</div>
+			{!user && !loading ? (
+				<div className="table-auth-banner glass-panel">
+					<div>
+						<p className="card-eyebrow">Guest mode</p>
+						<strong>Watching only</strong>
+						<p>Log in from the lobby to take a seat, act in hands, or manage this table.</p>
+					</div>
+					<button
+						type="button"
+						className="btn primary tiny"
+						onClick={navigateToLobby}
+					>
+						Log In from Lobby
+					</button>
+				</div>
+			) : null}
+			{tableNotice ? (
+				<div className="table-inline-notice glass-panel">
+					<span>{tableNotice}</span>
+					<button
+						type="button"
+						className="btn tiny"
+						onClick={() => setTableNotice(null)}
+					>
+						Dismiss
+					</button>
+				</div>
+			) : null}
 
 			<div className="table-layout">
 				<div className="table-stage anim-slide-up">
@@ -1024,6 +1233,13 @@ function TableScreen({
 								(backendPlayer.stack > 0 ||
 									backendTable?.hand_state.status === "in_progress");
 							const canClaimSeat =
+								user != null &&
+								!ownedPlayer &&
+								!pendingPlayer &&
+								backendPlayer?.is_bot &&
+								!reservedSeats.has(backendSeat);
+							const loginToClaimSeat =
+								user == null &&
 								!ownedPlayer &&
 								!pendingPlayer &&
 								backendPlayer?.is_bot &&
@@ -1084,6 +1300,14 @@ function TableScreen({
 												>
 													{claimButtonLabel}
 												</button>
+											) : loginToClaimSeat ? (
+												<button
+													type="button"
+													className="seat-claim-btn"
+													onClick={navigateToLobby}
+												>
+													Login for Seat {backendSeat}
+												</button>
 											) : reservedSeatLabel ? (
 												<div className="seat-reserved-badge">
 													{reservedSeatLabel}
@@ -1114,7 +1338,20 @@ function TableScreen({
 						Waiting for action...
 					</div>
 					<div className="controls-strip-actions">
-						{ownedPlayer ? (
+						{!user ? (
+							<>
+								<span className="controls-strip-hint">
+									Log in from the lobby to take a seat or manage the table.
+								</span>
+								<button
+									type="button"
+									className="btn primary tiny"
+									onClick={navigateToLobby}
+								>
+									Log In
+								</button>
+							</>
+						) : ownedPlayer ? (
 							<button
 								type="button"
 								className="btn tiny"
@@ -1170,6 +1407,7 @@ function TableScreen({
 							</button>
 						) : null}
 						{isCustomTable &&
+						user &&
 						backendTable?.hand_state.status !== "in_progress" ? (
 							<>
 								<button
@@ -1203,6 +1441,7 @@ function TableScreen({
 							</>
 						) : null}
 						{backendTable?.game_state === "waiting_for_hand" &&
+						user &&
 						readySeats >= 2 ? (
 							<button
 								type="button"
@@ -1266,6 +1505,7 @@ function TableScreen({
 							id="bet-slider"
 							min="0"
 							max="1000"
+							disabled={!user}
 							defaultValue="0"
 							onInput={handleSliderInput}
 						/>
@@ -1286,6 +1526,7 @@ function TableScreen({
 						type="button"
 						className="btn action-fold danger"
 						id="btn-fold"
+						disabled={!user}
 						onClick={handleFoldClick}
 					>
 						Fold
@@ -1295,6 +1536,7 @@ function TableScreen({
 						className="btn action-call"
 						id="btn-call"
 						data-action="check"
+						disabled={!user}
 						onClick={handleCallClick}
 					>
 						Check
@@ -1304,6 +1546,7 @@ function TableScreen({
 						className="btn action-raise primary"
 						id="btn-raise"
 						data-action="bet"
+						disabled={!user}
 						onClick={handleRaiseClick}
 					>
 						Bet
