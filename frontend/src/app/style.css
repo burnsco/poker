@@ -898,17 +898,17 @@ body {
 	flex-direction: column;
 }
 .pos-top .player-cards {
-	order: 1;
-} /* Cards far away from center (top) */
+	order: 4;
+} /* Cards closer to center (bottom) */
 .pos-top .player-avatar {
-	order: 2;
-}
-.pos-top .player-info {
 	order: 3;
 }
+.pos-top .player-info {
+	order: 2;
+}
 .pos-top .player-status {
-	order: 4;
-} /* Status closer to center (bottom) */
+	order: 1;
+} /* Status far from center (top) */
 
 .pos-bottom {
 	flex-direction: column;

@@ -217,8 +217,10 @@ export class PhoenixPokerGame {
   }
 
   get heroSeatIndex(): number | null {
-    const seat = this.table?.players.find((player) => player.player_id === this.playerId)?.seat;
-    return seat ? seat - 1 : null;
+    const seat = this.table?.players.find(
+      (player) => String(player.player_id) === String(this.playerId),
+    )?.seat;
+    return seat != null ? seat - 1 : null;
   }
 
   async startRound() {
@@ -261,7 +263,7 @@ export class PhoenixPokerGame {
           stack: backendPlayer.stack,
           status: this.mapStatus(backendPlayer.status),
           isBot: backendPlayer.is_bot,
-          isCurrentUser: backendPlayer.player_id === this.playerId,
+          isCurrentUser: String(backendPlayer.player_id) === String(this.playerId),
           willPlayNextHand: backendPlayer.will_play_next_hand,
           showCards: backendPlayer.show_cards,
           betThisStreet,
@@ -410,6 +412,10 @@ export class PhoenixPokerGame {
 
   private manualStartRequired(table: BackendTable | null): boolean {
     if (!table) return false;
+    // Only require manual start when the game is sitting idle waiting to begin.
+    // Once a hand is in progress or just completed, let the backend's auto-timer
+    // handle the next hand — don't block the human player from getting re-dealt.
+    if (table.game_state === "hand_in_progress") return false;
     return table.players.some(
       (player) => !player.is_bot && player.stack > 0 && player.will_play_next_hand,
     );

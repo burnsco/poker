@@ -1619,6 +1619,12 @@ defmodule PokerBackend.Table do
 
   defp normalize_player_id(_payload), do: nil
 
+  # Normalise a raw player_id value (not a payload map) to a string so that
+  # integer IDs stored from the HTTP path (42) and string IDs arriving from
+  # the WebSocket path ("42") compare as equal.
+  defp normalize_any_player_id(nil), do: nil
+  defp normalize_any_player_id(id), do: to_string(id)
+
   defp normalize_seat(%{"seat" => seat}) when is_integer(seat) and seat in @seats,
     do: seat
 
@@ -1634,7 +1640,7 @@ defmodule PokerBackend.Table do
   defp authorized_action?(%{is_bot: true}, _payload), do: true
 
   defp authorized_action?(player, payload) do
-    player.player_id == normalize_player_id(payload)
+    to_string(player.player_id) == to_string(normalize_player_id(payload))
   end
 
   defp increment_connection(state, player_id) do
@@ -1666,13 +1672,15 @@ defmodule PokerBackend.Table do
   end
 
   defp reconnect_player(state, player_id) do
+    norm_id = normalize_any_player_id(player_id)
+
     state =
-      case Enum.find(state.players, &(&1.player_id == player_id and not &1.is_bot)) do
+      case Enum.find(state.players, &(normalize_any_player_id(&1.player_id) == norm_id and not &1.is_bot)) do
         nil -> state
         player -> update_player(state, player.seat, &Map.put(&1, :connected, true))
       end
 
-    if Enum.any?(state.pending_players, &(&1.player_id == player_id)) do
+    if Enum.any?(state.pending_players, &(normalize_any_player_id(&1.player_id) == norm_id)) do
       update_pending_player(state, player_id, &Map.put(&1, :connected, true))
     else
       state
@@ -1683,8 +1691,10 @@ defmodule PokerBackend.Table do
     if Map.has_key?(state.client_connections, player_id) do
       state
     else
+      norm_id = normalize_any_player_id(player_id)
+
       state =
-        case Enum.find(state.players, &(&1.player_id == player_id and not &1.is_bot)) do
+        case Enum.find(state.players, &(normalize_any_player_id(&1.player_id) == norm_id and not &1.is_bot)) do
           nil ->
             state
 
