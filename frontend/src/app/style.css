@@ -1,8 +1,8 @@
 :root {
-	--bg-color-main: #08111f;
-	--bg-color-accent: #0f2038;
-	--glass-bg: rgba(255, 255, 255, 0.08);
-	--glass-border: rgba(255, 255, 255, 0.18);
+	--bg-color-main: #0a0f1d;
+	--bg-color-accent: #161e2e;
+	--glass-bg: #1c2536;
+	--glass-border: #2d3748;
 	--accent-color: #2f95ff;
 	--accent-hover: #52a6ff;
 	--danger-color: #d65858;

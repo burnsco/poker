@@ -73,6 +73,12 @@ const DEFAULT_TABLE: LobbyTable = {
 	stakes: "10 / 20",
 };
 
+const TEST_TABLE: LobbyTable = {
+	tableId: "test-table",
+	name: "TEST TABLE",
+	stakes: "50 / 100",
+};
+
 function createSeatLayouts(coordinates: SeatCoordinate[]): SeatLayout[] {
 	return coordinates.map(({ seatX, seatY }) => ({
 		seatX,
@@ -327,6 +333,7 @@ function LobbyScreen() {
 	const lobbyTables = useMemo(() => {
 		const map = new Map<string, LobbyTable>();
 		map.set(DEFAULT_TABLE.tableId, DEFAULT_TABLE);
+		map.set(TEST_TABLE.tableId, TEST_TABLE);
 		for (const table of storedTables) {
 			map.set(table.tableId, table);
 		}
