@@ -11,7 +11,7 @@ jobs:
   validate-backend:
     name: Backend Validation
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'corey-burns-dev'
+    if: github.repository_owner == 'burnsco'
     steps:
       - uses: actions/checkout@v4
       - name: Setup Elixir
@@ -29,7 +29,7 @@ jobs:
   validate-frontend:
     name: Frontend Validation
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'corey-burns-dev'
+    if: github.repository_owner == 'burnsco'
     steps:
       - uses: actions/checkout@v4
       - name: Setup Bun
@@ -47,7 +47,7 @@ jobs:
     name: Publish to GHCR
     needs: [validate-backend, validate-frontend]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository_owner == 'corey-burns-dev'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository_owner == 'burnsco'
     permissions:
       contents: read
       packages: write
