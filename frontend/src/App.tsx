@@ -640,7 +640,10 @@ function LobbyScreen() {
 							</p>
 						</div>
 
-						<div className={`auth-card glass-panel${authMode ? " is-open" : ""}`}>
+						<div 
+							className={`auth-card glass-panel${authMode ? " is-open" : ""}`}
+							style={{ pointerEvents: "auto", position: "relative", zIndex: 100 }}
+						>
 							<p className="card-eyebrow">
 								{user
 									? "Session active"
@@ -669,6 +672,17 @@ function LobbyScreen() {
 							{authMessage ? (
 								<p className="panel-message panel-message-error">{authMessage}</p>
 							) : null}
+
+							<button 
+								type="button" 
+								style={{ background: "red", color: "white", padding: "10px", margin: "10px 0" }}
+								onClick={() => {
+									console.log("App: TEST BUTTON CLICKED");
+									alert("App: TEST BUTTON WORKS");
+								}}
+							>
+								DEBUG: TEST CLICK
+							</button>
 
 							{user ? (
 								<div className="account-summary">
