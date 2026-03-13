@@ -48,6 +48,7 @@ defmodule PokerBackendWeb.Router do
     post "/users/log-in", UserSessionJSONController, :create
     delete "/users/log-out", UserSessionJSONController, :delete
     get "/users/me", UserSessionJSONController, :show
+    post "/users/refill", UserSessionJSONController, :refill
   end
 
   ## Authentication routes

@@ -339,6 +339,17 @@ body {
 	list-style: none;
 }
 
+.refill-btn {
+	background: linear-gradient(135deg, #d4af37, #a68a2d) !important;
+	border-color: rgba(255, 255, 255, 0.2) !important;
+	color: #fff !important;
+	box-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+}
+
+.refill-btn:hover {
+	box-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
+}
+
 .lobby-card {
 	border-radius: 8px;
 	padding: 0.75rem 1.2rem;

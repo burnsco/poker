@@ -77,6 +77,17 @@ defmodule PokerBackend.Accounts do
   end
 
   @doc """
+  Refills the user balance to 5000 if it is below 5000.
+  """
+  def refill_user_balance(user) do
+    if user.balance < 5000 do
+      update_user_balance(user, 5000)
+    else
+      {:ok, user}
+    end
+  end
+
+  @doc """
   Gets a user by username.
   """
   def get_user_by_username(username) when is_binary(username) do

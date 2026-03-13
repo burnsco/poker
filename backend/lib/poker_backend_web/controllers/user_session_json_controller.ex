@@ -31,4 +31,25 @@ defmodule PokerBackendWeb.UserSessionJSONController do
       |> json(%{error: "Not authenticated", code: "not_authenticated"})
     end
   end
+
+  def refill(conn, _params) do
+    if user = conn.assigns.current_scope && conn.assigns.current_scope.user do
+      case Accounts.refill_user_balance(user) do
+        {:ok, updated_user} ->
+          conn
+          |> put_view(PokerBackendWeb.UserJSON)
+          |> render(:show, user: updated_user)
+
+        {:error, changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> put_view(PokerBackendWeb.UserJSON)
+          |> render(:error, changeset: changeset)
+      end
+    else
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Not authenticated", code: "not_authenticated"})
+    end
+  end
 end

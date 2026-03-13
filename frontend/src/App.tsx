@@ -247,6 +247,7 @@ function LobbyScreen() {
 		login,
 		register,
 		logout,
+		refillBalance,
 	} = useAuth();
 	const [storedTables, setStoredTables] = useState<LobbyTable[]>(() =>
 		loadStoredTables(),
@@ -487,6 +488,16 @@ function LobbyScreen() {
 						<div className="session-chip">Checking session...</div>
 					) : user ? (
 						<>
+							{user.balance < 5000 && (
+								<button
+									type="button"
+									className="btn tiny primary refill-btn"
+									disabled={authPending}
+									onClick={() => void refillBalance()}
+								>
+									Refill Chips
+								</button>
+							)}
 							<button type="button" className="btn tiny profile-btn">
 								<span>{user.username}</span>
 								<span className="profile-balance">Balance {formatBalance(user.balance)}</span>
@@ -624,6 +635,17 @@ function LobbyScreen() {
 										<span className="account-label">Balance</span>
 										<strong>🪙 {formatBalance(user.balance)}</strong>
 									</div>
+									{user.balance < 5000 && (
+										<button
+											type="button"
+											className="btn primary"
+											style={{ gridColumn: "span 2", marginTop: "0.5rem" }}
+											disabled={authPending}
+											onClick={() => void refillBalance()}
+										>
+											Refill to 🪙 5,000
+										</button>
+									)}
 								</div>
 							) : authMode ? (
 								<form
@@ -800,7 +822,7 @@ function TableScreen({
 	tableId: string;
 	isCustomTable: boolean;
 }) {
-	const { loading, user } = useAuth();
+	const { loading, user, refillBalance, authPending } = useAuth();
 	const gameRef = useRef<PhoenixPokerGame | null>(null);
 	const rendererRef = useRef<Renderer | null>(null);
 	const [backendOverlayCollapsed, setBackendOverlayCollapsed] = useState(true);
@@ -1322,6 +1344,16 @@ function TableScreen({
 						Waiting for action...
 					</div>
 					<div className="controls-strip-actions">
+						{user && user.balance < 5000 && (
+							<button
+								type="button"
+								className="btn tiny primary refill-btn"
+								disabled={authPending}
+								onClick={() => void refillBalance()}
+							>
+								Refill 🪙 5,000
+							</button>
+						)}
 						{!user ? (
 							<>
 								<span className="controls-strip-hint">

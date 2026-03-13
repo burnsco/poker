@@ -19,6 +19,7 @@ type AuthContextType = {
   register: (email: string, username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  refillBalance: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -151,6 +152,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const refillBalance = async () => {
+    setAuthPending(true);
+    setAuthError(null);
+
+    try {
+      const data = await requestJson<{ data: User }>(
+        `${BACKEND_URL}/api/users/refill`,
+        {
+          method: "POST",
+          credentials: "include",
+        },
+        "Refill failed",
+      );
+
+      setUser(data.data);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Refill failed";
+      setAuthError(message);
+      throw error;
+    } finally {
+      setAuthPending(false);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -164,6 +189,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         refreshUser,
+        refillBalance,
       }}
     >
       {children}
