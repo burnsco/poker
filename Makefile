@@ -5,7 +5,13 @@ BASE_URL ?= http://127.0.0.1:4000
 HUMANS_PER_TABLE ?= 2
 SESSION_SECONDS ?= 180
 
-.PHONY: up down build logs ps deploy deploy-down frontend-shell backend-shell frontend-install frontend-lint frontend-test frontend-build frontend-check backend-setup backend-compile backend-test backend-check check training-venv training-train training-train-leduc training-train-leduc-50k training-aggregate training-retrain training-train-holdem training-aggregate-holdem training-retrain-holdem stress-stack-up stress-stack-down stress-low stress-medium stress-high stress-extreme stress-insane stress-thousands
+.PHONY: up down build logs ps deploy deploy-down frontend-shell backend-shell frontend-install frontend-lint frontend-test frontend-build frontend-check backend-setup backend-compile backend-test backend-check check push-images training-venv training-train training-train-leduc training-train-leduc-50k training-aggregate training-retrain training-train-holdem training-aggregate-holdem training-retrain-holdem stress-stack-up stress-stack-down stress-low stress-medium stress-high stress-extreme stress-insane stress-thousands
+
+push-images:
+	docker build --target prod -t ghcr.io/burnsco/poker-frontend:latest -f Dockerfile.frontend .
+	docker build --target prod -t ghcr.io/burnsco/poker-backend:latest -f Dockerfile.backend .
+	docker push ghcr.io/burnsco/poker-frontend:latest
+	docker push ghcr.io/burnsco/poker-backend:latest
 
 up:
 	$(COMPOSE) up --build

@@ -21,6 +21,7 @@ RUN mix deps.compile
 COPY backend/lib lib
 RUN mix compile
 COPY backend/config/runtime.exs config/
+LABEL org.opencontainers.image.source="https://github.com/burnsco/poker"
 RUN mix release
 
 # Stage 4: Run the release (Prod)

@@ -16,6 +16,7 @@ ARG VITE_BACKEND_URL
 ARG VITE_BACKEND_WS_URL
 ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
 ENV VITE_BACKEND_WS_URL=$VITE_BACKEND_WS_URL
+LABEL org.opencontainers.image.source="https://github.com/burnsco/poker"
 RUN bun run build
 
 # Stage 4: Run the frontend (Prod)
