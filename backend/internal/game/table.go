@@ -8,12 +8,13 @@ import (
 )
 
 const (
-	SmallBlind    = 10
-	BigBlind      = 20
-	StartingStack = 5000
-	HandDelay     = 5 * time.Second
-	BotDelay      = 450 * time.Millisecond
-	LogLimit      = 48
+	SmallBlind             = 10
+	BigBlind               = 20
+	StartingStack          = 5000
+	HandDelay              = 5 * time.Second
+	BotDelay               = 450 * time.Millisecond
+	DisconnectedHumanDelay = 30 * time.Second
+	LogLimit               = 48
 )
 
 var Seats = []int{1, 2, 3, 4, 5, 6, 7, 8}
@@ -103,6 +104,8 @@ func (t *Table) handleAutoProgress(seq int) {
 		t.nextHand()
 	} else if t.state.HandState.Status == "in_progress" && t.isBotTurn() {
 		t.applyBotAction()
+	} else if t.state.HandState.Status == "in_progress" && t.isDisconnectedHumanTurn() {
+		t.processHandAction("fold", map[string]interface{}{})
 	}
 
 	t.broadcast()

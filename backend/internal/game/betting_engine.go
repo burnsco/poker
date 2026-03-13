@@ -293,7 +293,7 @@ func (t *Table) concludeShowdown() {
 		tierSize := a - lastAmount
 		potForThisTier := 0
 		var eligibleWithEvals []HandEvaluation
-		
+
 		for _, p := range t.state.Players {
 			if p.ContributedThisHand >= a {
 				potForThisTier += tierSize
@@ -340,7 +340,7 @@ func (t *Table) concludeShowdown() {
 				}
 				winnerAmounts[fmt.Sprintf("%d", w.Seat)] += amt
 				winnerSeatsSet[w.Seat] = true
-				
+
 				// Update player stack
 				for j := range t.state.Players {
 					if t.state.Players[j].Seat == w.Seat {
@@ -362,7 +362,7 @@ func (t *Table) concludeShowdown() {
 
 	t.state.HandState.Status = "complete"
 	t.state.HandState.Stage = "showdown"
-	
+
 	winnerSeats := []int{}
 	for s := range winnerSeatsSet {
 		winnerSeats = append(winnerSeats, s)

@@ -16,19 +16,21 @@ type User struct {
 }
 
 type Player struct {
-	Seat                int      `json:"seat"`
-	Name                string   `json:"name"`
-	Stack               int      `json:"stack"`
-	Status              string   `json:"status"`
-	WillPlayNextHand    bool     `json:"will_play_next_hand"`
-	ShowCards           bool     `json:"show_cards"`
-	IsBot               bool     `json:"is_bot"`
-	BotStyle            *string  `json:"bot_style"`
-	PlayerID            *string  `json:"player_id"`
-	Connected           bool     `json:"connected"`
-	BetThisStreet       int      `json:"bet_this_street"`
-	ContributedThisHand int      `json:"contributed_this_hand"`
-	HoleCards           []string `json:"hole_cards"`
+	Seat                int        `json:"seat"`
+	Name                string     `json:"name"`
+	Stack               int        `json:"stack"`
+	Status              string     `json:"status"`
+	WillPlayNextHand    bool       `json:"will_play_next_hand"`
+	ShowCards           bool       `json:"show_cards"`
+	IsBot               bool       `json:"is_bot"`
+	IsEmpty             bool       `json:"is_empty"`
+	BotStyle            *string    `json:"bot_style"`
+	PlayerID            *string    `json:"player_id"`
+	Connected           bool       `json:"connected"`
+	DisconnectedAt      *time.Time `json:"disconnected_at"`
+	BetThisStreet       int        `json:"bet_this_street"`
+	ContributedThisHand int        `json:"contributed_this_hand"`
+	HoleCards           []string   `json:"hole_cards"`
 }
 
 type HandState struct {

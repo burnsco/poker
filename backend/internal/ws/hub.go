@@ -87,6 +87,19 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		playerID: playerID,
 	}
 
+	defer func() {
+		// Clean up table memberships on disconnect
+		if client.playerID != "" {
+			for topic := range client.topics {
+				if len(topic) > 6 && topic[:6] == "table:" {
+					tableID := topic[6:]
+					t := game.GetRegistry().GetTable(tableID)
+					t.Leave(client.playerID)
+				}
+			}
+		}
+	}()
+
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -210,5 +223,8 @@ func (c *Client) push(topic string, event string, payload interface{}) {
 	resp := []interface{}{joinRef, nil, topic, event, payload}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.conn.WriteJSON(resp)
+	err := c.conn.WriteJSON(resp)
+	if err != nil {
+		c.conn.Close()
+	}
 }

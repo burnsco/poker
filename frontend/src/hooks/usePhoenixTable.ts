@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { requestJson } from "../lib/api";
+import { getBackendUrl, requestJson } from "../lib/api";
 import type { BackendHealth, BackendTable } from "../types/backend";
 
 type PhoenixMessage = [string | null, string | null, string, string, unknown];
@@ -10,25 +10,16 @@ type TableActionPayload = {
   show_cards?: boolean;
 };
 
-const getBackendUrl = () => {
-  const envUrl = import.meta.env.VITE_BACKEND_URL;
-  if (typeof window === "undefined") return envUrl || "";
-  if (envUrl && (!envUrl.includes("localhost:4000") || window.location.hostname === "localhost")) {
-    return envUrl;
-  }
-  return window.location.origin;
-};
-
 const BACKEND_URL = getBackendUrl();
 
 const getWebSocketBase = () => {
   const envWs = import.meta.env.VITE_BACKEND_WS_URL;
   if (typeof window === "undefined") return envWs || "ws://localhost:4000/socket";
-  
+
   if (envWs && (!envWs.includes("localhost:4000") || window.location.hostname === "localhost")) {
     return envWs;
   }
-  
+
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${window.location.host}/socket`;
 };
@@ -112,7 +103,6 @@ export function usePhoenixTable(tableId = "default"): UsePhoenixTableResult {
             amount: payload?.amount,
             seat: payload?.seat,
             show_cards: payload?.show_cards,
-            player_id: playerId,
             player_name: playerName,
           }),
         },

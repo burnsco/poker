@@ -2,7 +2,6 @@ export type BackendHealth = {
   status: string;
   service: string;
   framework: string;
-  websocket_path: string;
 };
 
 export type BackendPlayer = {

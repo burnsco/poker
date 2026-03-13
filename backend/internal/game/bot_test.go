@@ -15,9 +15,10 @@ func TestChooseBotAction_Preflop(t *testing.T) {
 	}
 
 	tbl.state.HandState = models.HandState{
-		Status:     "in_progress",
-		Stage:      "preflop",
-		CurrentBet: 20,
+		Status:       "in_progress",
+		Stage:        "preflop",
+		CurrentBet:   20,
+		MinimumRaise: 20,
 	}
 
 	action, payload := tbl.chooseBotAction(player)

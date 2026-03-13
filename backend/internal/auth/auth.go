@@ -3,21 +3,30 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
+	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtSecret = []byte(getEnv("JWT_SECRET", "poker-secret-key-change-me"))
+var jwtSecret = getJWTSecret()
 
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
+func getJWTSecret() []byte {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		log.Fatal("JWT_SECRET environment variable must be set")
 	}
-	return fallback
+	return []byte(secret)
+}
+
+func init() {
+	if testing.Testing() {
+		jwtSecret = []byte("test-secret-key")
+	}
 }
 
 type Claims struct {

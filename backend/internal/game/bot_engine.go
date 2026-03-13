@@ -129,6 +129,19 @@ func (t *Table) isBotTurn() bool {
 	return false
 }
 
+func (t *Table) isDisconnectedHumanTurn() bool {
+	if t.state.HandState.ActingSeat == nil {
+		return false
+	}
+	seat := *t.state.HandState.ActingSeat
+	for _, p := range t.state.Players {
+		if p.Seat == seat {
+			return !p.IsBot && p.Status == "ACTIVE" && !p.Connected
+		}
+	}
+	return false
+}
+
 func (t *Table) applyBotAction() {
 	if t.state.HandState.ActingSeat == nil {
 		return

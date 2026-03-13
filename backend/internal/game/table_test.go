@@ -104,3 +104,30 @@ func TestConcludeShowdown_SplitPot_Remainder(t *testing.T) {
 		t.Errorf("Expected split to be 201/200, got %d/%d", aliceAmount, bobAmount)
 	}
 }
+
+func TestLeave_DisconnectsPlayer(t *testing.T) {
+	playerID := "test@example.com"
+	tbl := &Table{
+		state: models.TableState{
+			Players: []models.Player{
+				{
+					Seat:      1,
+					Name:      "Test Player",
+					PlayerID:  &playerID,
+					IsBot:     false,
+					Connected: true,
+				},
+			},
+			ClientConnections: map[string]int{playerID: 1},
+		},
+	}
+
+	tbl.Leave(playerID)
+
+	if tbl.state.Players[0].Connected {
+		t.Errorf("Expected player to be disconnected")
+	}
+	if tbl.state.ClientConnections[playerID] != 0 {
+		t.Errorf("Expected client connections to be 0, got %d", tbl.state.ClientConnections[playerID])
+	}
+}

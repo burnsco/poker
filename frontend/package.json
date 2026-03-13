@@ -16,8 +16,8 @@
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
-      "oxlint --fix",
-      "oxfmt"
+      "bun x oxlint --fix",
+      "bun x oxfmt"
     ]
   },
   "dependencies": {

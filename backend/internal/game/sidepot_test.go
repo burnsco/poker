@@ -13,10 +13,10 @@ func TestConcludeShowdown_SidePots(t *testing.T) {
 	// Total Pot: 1100
 	// Alice has the best hand.
 	// Bob has the second best hand.
-	
+
 	// Alice should win 300.
 	// Bob should win 800.
-	
+
 	tbl := &Table{
 		state: models.TableState{
 			Players: []models.Player{

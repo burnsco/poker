@@ -37,7 +37,9 @@ func (t *Table) buildEmptySeat(seat int) models.Player {
 		Status:              "SITTING_OUT",
 		WillPlayNextHand:    false,
 		IsBot:               true,
+		IsEmpty:             true,
 		Connected:           false,
+		DisconnectedAt:      nil,
 		BetThisStreet:       0,
 		ContributedThisHand: 0,
 		HoleCards:           []string{"", ""},
@@ -74,8 +76,29 @@ func (t *Table) Join(playerID string, playerName string) {
 	t.scheduleAutoProgress()
 }
 
+func (t *Table) Leave(playerID string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.decrementConnection(playerID)
+	t.disconnectPlayer(playerID)
+	t.state.LastEvent = playerID + " left the table"
+	t.broadcast()
+	t.scheduleAutoProgress()
+}
+
 func (t *Table) incrementConnection(playerID string) {
 	t.state.ClientConnections[playerID]++
+	t.state.ConnectedClients = t.totalConnections()
+}
+
+func (t *Table) decrementConnection(playerID string) {
+	if count, exists := t.state.ClientConnections[playerID]; exists && count > 0 {
+		t.state.ClientConnections[playerID]--
+		if t.state.ClientConnections[playerID] == 0 {
+			delete(t.state.ClientConnections, playerID)
+		}
+	}
 	t.state.ConnectedClients = t.totalConnections()
 }
 
@@ -96,12 +119,29 @@ func (t *Table) reconnectPlayer(playerID string) {
 	}
 }
 
+func (t *Table) disconnectPlayer(playerID string) {
+	for i := range t.state.Players {
+		if t.state.Players[i].PlayerID != nil && *t.state.Players[i].PlayerID == playerID && !t.state.Players[i].IsBot {
+			// Only disconnect if no more connections for this player
+			if t.state.ClientConnections[playerID] == 0 {
+				t.state.Players[i].Connected = false
+				now := time.Now()
+				t.state.Players[i].DisconnectedAt = &now
+			}
+			return
+		}
+	}
+}
+
 func (t *Table) autoProgressDelay() time.Duration {
 	if t.autoStartNextHand() {
 		return HandDelay
 	}
 	if t.state.HandState.Status == "in_progress" && t.isBotTurn() {
 		return BotDelay
+	}
+	if t.state.HandState.Status == "in_progress" && t.isDisconnectedHumanTurn() {
+		return DisconnectedHumanDelay
 	}
 	return 0
 }
@@ -226,7 +266,7 @@ func (t *Table) seatUnavailable(seat int, playerID string) bool {
 }
 
 func (t *Table) seatClaimImmediate(p models.Player) bool {
-	return (p.IsBot && p.PlayerID == nil && p.Stack <= 0) || t.state.HandState.Status != "in_progress"
+	return p.IsEmpty || t.state.HandState.Status != "in_progress"
 }
 
 func (t *Table) sitIn(payload map[string]interface{}) {
@@ -291,7 +331,6 @@ func (t *Table) nextHand() {
 			deck = append(deck, r+s)
 		}
 	}
-	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(deck), func(i, j int) { deck[i], deck[j] = deck[j], deck[i] })
 
 	t.dealHoleCards(pos.dealer, &deck)
@@ -327,7 +366,7 @@ func (t *Table) materializePendingPlayers() {
 	for _, pending := range t.state.PendingPlayers {
 		replaced := false
 		for i, p := range t.state.Players {
-			if p.Seat == pending.DesiredSeat && p.IsBot && p.PlayerID == nil {
+			if p.Seat == pending.DesiredSeat && p.IsEmpty {
 				pid := pending.PlayerID
 				t.state.Players[i] = models.Player{
 					Seat:             p.Seat,
@@ -469,7 +508,7 @@ func (t *Table) orderedSeatsFrom(seats []int, start int) []int {
 
 func (t *Table) pruneDisconnected() {
 	for i, p := range t.state.Players {
-		if !p.IsBot && !p.Connected {
+		if !p.IsBot && !p.Connected && p.DisconnectedAt != nil && time.Since(*p.DisconnectedAt) > 60*time.Second {
 			t.state.Players[i] = t.buildBotPlayer(p.Seat, p.Stack)
 		}
 	}

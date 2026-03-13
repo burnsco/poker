@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"os"
 	"poker-backend/internal/auth"
 	"poker-backend/internal/db"
 	"poker-backend/internal/game"
@@ -79,8 +80,9 @@ func TableAction(c *gin.Context) {
 func setAuthCookie(c *gin.Context, token string, maxAge int) {
 	// In production, Secure should be true. For now, we'll keep it false for development.
 	// But HttpOnly and SameSite should be strict.
+	secure := os.Getenv("ENV") == "production" || os.Getenv("HTTPS") == "true"
 	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("_poker_key", token, maxAge, "/", "", false, true)
+	c.SetCookie("_poker_key", token, maxAge, "/", "", secure, true)
 }
 
 func RegisterUser(c *gin.Context) {
