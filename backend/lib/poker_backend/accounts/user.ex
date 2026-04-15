@@ -6,6 +6,7 @@ defmodule PokerBackend.Accounts.User do
     field :email, :string
     field :username, :string
     field :balance, :integer, default: 5000
+    field :last_refill_at, :utc_datetime
     field :password, :string, virtual: true, redact: true
     field :hashed_password, :string, redact: true
     field :confirmed_at, :utc_datetime
@@ -19,7 +20,7 @@ defmodule PokerBackend.Accounts.User do
   """
   def registration_changeset(user, attrs, opts \\ []) do
     user
-    |> cast(attrs, [:email, :password, :username, :balance])
+    |> cast(attrs, [:email, :password, :username])
     |> validate_email(opts)
     |> validate_username(opts)
     |> validate_password(opts)

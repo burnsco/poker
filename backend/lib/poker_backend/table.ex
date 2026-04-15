@@ -1986,20 +1986,14 @@ defmodule PokerBackend.Table do
   end
 
   defp persist_player_balance(player, table_id) do
-    case Accounts.get_user(player.player_id) do
-      nil ->
+    case Accounts.set_user_balance(player.player_id, player.stack) do
+      :ok ->
         :ok
 
-      user ->
-        case Accounts.update_user_balance(user, player.stack) do
-          {:ok, _user} ->
-            :ok
-
-          {:error, changeset} ->
-            Logger.warning(
-              "failed to persist balance for player #{player.player_id} at table #{table_id}: #{inspect(changeset.errors)}"
-            )
-        end
+      {:error, reason} ->
+        Logger.warning(
+          "failed to persist balance for player #{player.player_id} at table #{table_id}: #{inspect(reason)}"
+        )
     end
   rescue
     error ->

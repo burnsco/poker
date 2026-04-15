@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { requestJson } from "../lib/api";
+import { BACKEND_URL, WEBSOCKET_BASE } from "../lib/config";
 import type { BackendHealth, BackendTable } from "../types/backend";
 
 type PhoenixMessage = [string | null, string | null, string, string, unknown];
@@ -10,38 +11,8 @@ type TableActionPayload = {
   show_cards?: boolean;
 };
 
-const getBackendUrl = () => {
-  const envUrl = import.meta.env.VITE_BACKEND_URL;
-  if (typeof window === "undefined") return envUrl || "";
-  if (envUrl && (!envUrl.includes("localhost:4000") || window.location.hostname === "localhost")) {
-    return envUrl;
-  }
-  return window.location.origin;
-};
-
-const BACKEND_URL = getBackendUrl();
-
-const getWebSocketBase = () => {
-  const envWs = import.meta.env.VITE_BACKEND_WS_URL;
-  if (typeof window === "undefined") return envWs || "ws://localhost:4000/socket";
-  
-  if (envWs && (!envWs.includes("localhost:4000") || window.location.hostname === "localhost")) {
-    return envWs;
-  }
-  
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/socket`;
-};
-
-const WEBSOCKET_BASE = getWebSocketBase();
-
 const PLAYER_ID_STORAGE_KEY = "poker.player_id";
 const PROFILE_STORAGE_KEY = "poker.profile";
-
-function getBaseUrl() {
-  if (typeof window === "undefined") return "http://localhost:4000";
-  return window.location.origin;
-}
 
 function loadPlayerIdentity() {
   if (typeof window === "undefined") {
@@ -84,7 +55,10 @@ type UsePhoenixTableResult = {
 
 export function usePhoenixTable(tableId = "default"): UsePhoenixTableResult {
   const { user } = useAuth();
-  const { playerId: guestPlayerId, playerName: guestPlayerName } = loadPlayerIdentity();
+  const { playerId: guestPlayerId, playerName: guestPlayerName } = useMemo(
+    () => loadPlayerIdentity(),
+    [],
+  );
 
   const playerId = user ? String(user.id) : guestPlayerId;
   const playerName = user ? user.username : guestPlayerName;
@@ -95,7 +69,7 @@ export function usePhoenixTable(tableId = "default"): UsePhoenixTableResult {
 
   const sendAction = useCallback(
     async (action: string, payload?: TableActionPayload) => {
-      const baseUrl = BACKEND_URL || getBaseUrl();
+      const baseUrl = BACKEND_URL || (typeof window !== "undefined" ? window.location.origin : "");
       const actionUrl = new URL(`${baseUrl}/api/tables/${tableId}/actions`);
       actionUrl.searchParams.set("action", action);
 

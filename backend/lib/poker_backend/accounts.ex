@@ -70,20 +70,63 @@ defmodule PokerBackend.Accounts do
   @doc """
   Updates the user balance.
   """
-  def update_user_balance(user, balance) do
+  def update_user_balance(user, balance) when is_integer(balance) and balance >= 0 do
     user
     |> Ecto.Changeset.cast(%{balance: balance}, [:balance])
+    |> Ecto.Changeset.validate_number(:balance, greater_than_or_equal_to: 0)
     |> Repo.update()
   end
+
+  def update_user_balance(_user, _balance), do: {:error, :invalid_balance}
+
+  @doc """
+  Sets a user's balance by id.
+  """
+  def set_user_balance(user_id, new_balance)
+      when is_integer(user_id) and is_integer(new_balance) and new_balance >= 0 do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    from(u in User, where: u.id == ^user_id)
+    |> Repo.update_all(set: [balance: new_balance, updated_at: now])
+    |> case do
+      {1, _} -> :ok
+      {0, _} -> {:error, :not_found}
+    end
+  end
+
+  def set_user_balance(_user_id, _new_balance), do: {:error, :invalid_balance}
+
+  @refill_cooldown_seconds 600
 
   @doc """
   Refills the user balance to 5000 if it is below 5000.
   """
   def refill_user_balance(user) do
-    if user.balance < 5000 do
-      update_user_balance(user, 5000)
-    else
-      {:ok, user}
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    cond do
+      user.balance >= 5000 ->
+        {:ok, user}
+
+      refill_cooldown_remaining_seconds(user, now) > 0 ->
+        {:error, :refill_cooldown, refill_cooldown_remaining_seconds(user, now)}
+
+      true ->
+        user
+        |> Ecto.Changeset.cast(%{balance: 5000, last_refill_at: now}, [:balance, :last_refill_at])
+        |> Ecto.Changeset.validate_number(:balance, greater_than_or_equal_to: 0)
+        |> Repo.update()
+    end
+  end
+
+  defp refill_cooldown_remaining_seconds(user, now) do
+    case user.last_refill_at do
+      %DateTime{} = last_refill_at ->
+        elapsed = DateTime.diff(now, last_refill_at, :second)
+        max(@refill_cooldown_seconds - elapsed, 0)
+
+      _ ->
+        0
     end
   end
 

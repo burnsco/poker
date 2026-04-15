@@ -11,21 +11,12 @@ import { PhoenixPokerGame } from "./game/PhoenixPokerGame";
 import { usePhoenixTable } from "./hooks/usePhoenixTable";
 import { useAuth } from "./contexts/AuthContext";
 import { ApiRequestError, requestJson } from "./lib/api";
+import { BACKEND_URL } from "./lib/config";
 import type { BackendTable } from "./types/backend";
 import type { Renderer } from "./ui/Renderer";
 
 const MAX_SEATS = 8;
 const TABLE_HASH_PREFIX = "#/tables/";
-const getBackendUrl = () => {
-	const envUrl = import.meta.env.VITE_BACKEND_URL;
-	if (typeof window === "undefined") return envUrl || "";
-	if (envUrl && (!envUrl.includes("localhost:4000") || window.location.hostname === "localhost")) {
-		return envUrl;
-	}
-	return window.location.origin;
-};
-
-const BACKEND_URL = getBackendUrl();
 const TABLE_STORAGE_KEY = "poker.lobby_tables";
 
 type SeatLayout = {
@@ -186,6 +177,22 @@ async function fetchTableState(tableId: string): Promise<BackendTable | null> {
 	}
 }
 
+async function fetchTableSummary(): Promise<Map<string, BackendTable>> {
+	try {
+		const data = await requestJson<{ data: Array<{ table_id: string; state: BackendTable }> }>(
+			`${BACKEND_URL}/api/tables/summary`,
+			{
+				credentials: "include",
+			},
+			"Failed to load table summary",
+		);
+
+		return new Map(data.data.map((entry) => [entry.table_id, entry.state]));
+	} catch {
+		return new Map<string, BackendTable>();
+	}
+}
+
 async function postTableAction(
 	tableId: string,
 	action: string,
@@ -217,7 +224,7 @@ function parseTableId(tableId: string): LobbyTable {
 	const parts = tableId.split("-");
 	if (parts.length < 2) return { tableId, name: tableId, stakes: "10 / 20" };
 	
-	const suffix = parts.pop();
+	parts.pop();
 	const name = parts.join(" ").replace(/\b\w/g, c => c.toUpperCase());
 	return { tableId, name, stakes: "10 / 20" };
 }
@@ -266,6 +273,7 @@ function LobbyScreen() {
 
 	const refreshGames = useCallback(async () => {
 		const activeTables = await fetchActiveTables();
+		const tableSummary = await fetchTableSummary();
 		
 		const map = new Map<string, LobbyTable>();
 		map.set(DEFAULT_TABLE.tableId, DEFAULT_TABLE);
@@ -279,7 +287,7 @@ function LobbyScreen() {
 
 		const loaded = await Promise.all(
 			allTables.map(async (table): Promise<LobbyGame> => {
-				const state = await fetchTableState(table.tableId);
+				const state = tableSummary.get(table.tableId) ?? (await fetchTableState(table.tableId));
 				const activeBots =
 					state?.players?.filter((player) => player.is_bot && player.stack > 0)
 						.length ?? 0;

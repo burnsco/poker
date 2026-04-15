@@ -45,6 +45,15 @@ defmodule PokerBackendWeb.UserSessionJSONController do
           |> put_status(:unprocessable_entity)
           |> put_view(PokerBackendWeb.UserJSON)
           |> render(:error, changeset: changeset)
+
+        {:error, :refill_cooldown, seconds_remaining} ->
+          conn
+          |> put_status(:too_many_requests)
+          |> json(%{
+            error: "Refill is on cooldown",
+            code: "refill_cooldown",
+            seconds_remaining: seconds_remaining
+          })
       end
     else
       conn

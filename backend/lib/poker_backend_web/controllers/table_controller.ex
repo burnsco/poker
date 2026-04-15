@@ -11,10 +11,28 @@ defmodule PokerBackendWeb.TableController do
     json(conn, %{data: table_ids})
   end
 
+  def summary(conn, _params) do
+    table_ids = PokerBackend.Table.list_active_tables()
+
+    data =
+      Enum.map(table_ids, fn table_id ->
+        state =
+          table_id
+          |> PokerBackend.Table.state()
+          |> filter_state_for_player(nil)
+
+        %{table_id: table_id, state: state}
+      end)
+
+    json(conn, %{data: data})
+  end
+
   def show(conn, %{"table_id" => table_id}) do
     if valid_table_id?(table_id) do
       {:ok, _pid} = PokerBackend.Table.ensure_started(table_id)
-      json(conn, PokerBackend.Table.state(table_id))
+      viewer_player_id = conn.assigns[:current_scope] && conn.assigns.current_scope.user && conn.assigns.current_scope.user.id
+      state = PokerBackend.Table.state(table_id)
+      json(conn, filter_state_for_player(state, viewer_player_id))
     else
       conn |> put_status(400) |> json(%{error: "invalid_table_id"})
     end
@@ -66,5 +84,24 @@ defmodule PokerBackendWeb.TableController do
     reason
     |> String.replace("_", " ")
     |> String.capitalize()
+  end
+
+  defp filter_state_for_player(state, viewer_player_id) do
+    filtered_players =
+      Enum.map(state.players, fn player ->
+        if should_reveal_cards?(player, viewer_player_id) do
+          player
+        else
+          %{player | hole_cards: [nil, nil]}
+        end
+      end)
+
+    state
+    |> Map.put(:players, filtered_players)
+    |> update_in([:hand_state], fn hand_state -> Map.delete(hand_state, :deck) end)
+  end
+
+  defp should_reveal_cards?(player, viewer_player_id) do
+    player.is_bot or player.show_cards or to_string(player.player_id) == to_string(viewer_player_id)
   end
 end
