@@ -6,18 +6,16 @@ This directory sets up [OpenSpiel](https://github.com/google-deepmind/open_spiel
 
 ```bash
 # From repo root or training/
-python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+uv sync
 
 # Train on Leduc poker (default, ~10k iterations)
-python train_cfr.py
+uv run python train_cfr.py
 
 # Train on Kuhn poker (very fast), export policy
-python train_cfr.py --game kuhn_poker --iterations 1000 -o policies/kuhn.json
+uv run python train_cfr.py --game kuhn_poker --iterations 1000 -o policies/kuhn.json
 
 # More iterations and exploitability logging
-python train_cfr.py --game leduc_poker --iterations 50000 --exploitability-every 5000 -o policies/leduc.json
+uv run python train_cfr.py --game leduc_poker --iterations 50000 --exploitability-every 5000 -o policies/leduc.json
 ```
 
 ## Supported games
@@ -56,7 +54,7 @@ The `open_spiel` pip package is a binary wheel (e.g. x86_64). If it’s not avai
 ```bash
 # Ubuntu/Debian
 sudo apt-get install cmake clang python3-dev
-pip install --no-binary=:all: open_spiel
+uv pip install --no-binary=:all: open_spiel
 ```
 
 See [OpenSpiel installation](https://openspiel.readthedocs.io/en/latest/install.html) for full instructions.
